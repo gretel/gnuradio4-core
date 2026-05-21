@@ -5,7 +5,7 @@
 Get the source from the GitHub Repository:
 
 ```bash
-git clone git@github.com:fair-acc/gnuradio4.git
+git clone git@github.com:gnuradio/gnuradio4.git
 ```
 
 ## Building

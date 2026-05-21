@@ -20,7 +20,7 @@ g++ --version
 
 ## Clone Repository
 
-git clone https://github.com/fair-acc/gnuradio4.git
+git clone https://github.com/gnuradio/gnuradio4.git
 cd gnuradio4
 
 ## Build
@@ -50,7 +50,7 @@ MacOS builds are supported by using `llvm@20` from the [Homebrew package manager
 
 - Linux: Expected to work with a modern toolchain
 - Windows: See Windows setup instructions:
-  https://github.com/fair-acc/gnuradio4/blob/main/DEVELOPMENT.md#win32-development-environment---msys2
+  https://github.com/gnuradio/gnuradio4/blob/main/DEVELOPMENT.md#win32-development-environment---msys2
 - macOS: supported using llvm@20 from homebrew
 
 ## Troubleshooting
@@ -62,4 +62,4 @@ MacOS builds are supported by using `llvm@20` from the [Homebrew package manager
   - CMakeFiles/CMakeOutput.log
 
 For a reproducible setup, see Docker workflow:
-https://github.com/fair-acc/gnuradio4/blob/main/DEVELOPMENT.md#docker-cli
+https://github.com/gnuradio/gnuradio4/blob/main/DEVELOPMENT.md#docker-cli
