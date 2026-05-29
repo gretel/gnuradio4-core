@@ -11,6 +11,12 @@ As the installation and packaging matures, these instructions are expected to be
 - C++23 compatible compiler
   - GCC ≥ 14.2 (Linux)
 - Git
+- pkg-config
+- Boost.UT development package or installed headers
+- cpp-httplib development package
+- cpr development package (or `-DGR_ENABLE_HTTP=OFF`)
+- libsoundio development package
+- vir-simd headers
 - Python 3 (optional)
 
 Verify tool versions:
@@ -38,9 +44,11 @@ ctest --output-on-failure
 ## Ubuntu 24.04 (Dependencies)
 
 sudo apt update
-sudo apt install -y cmake g++ git python3 python3-dev
+sudo apt install -y cmake g++ git libcpp-httplib-dev libsoundio-dev pkg-config python3 python3-dev
 
-Then follow the build steps above.
+Ubuntu 24.04 does not package all native dependencies used by the default build. Install CPR, Boost.UT, and vir-simd
+from source or use the GNU Radio CI builder image. For an explicit online fallback, configure with
+`-DGR_USE_FETCHCONTENT_DEPS=ON`. To build without native HTTP support, pass `-DGR_ENABLE_HTTP=OFF`.
 
 ## MacOS via Homebrew
 

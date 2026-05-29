@@ -14,6 +14,7 @@ set(GR4_PKG_VERSION
 
 include(CMakePackageConfigHelpers)
 include(GNUInstallDirs)
+find_package(PkgConfig QUIET)
 
 set(CMAKE_POSITION_INDEPENDENT_CODE TRUE)
 
@@ -206,6 +207,7 @@ option(ENABLE_TBB "Enable the TBB dependency for std::execution::par in gcc" OFF
 option(ENABLE_EXAMPLES "Enable Example Builds" ${GR_TOPLEVEL_PROJECT})
 option(ENABLE_TESTING "Enable Test Builds" ${GR_TOPLEVEL_PROJECT})
 option(MIT_ONLY "Exclude modules with non-MIT/Apache-compatible licences" OFF)
+option(GR_USE_FETCHCONTENT_DEPS "Allow CMake to download selected third-party dependencies with FetchContent" OFF)
 
 if(NOT DEFINED GR_DATA_CACHE_DIR)
   set(GR_DATA_CACHE_DIR
@@ -481,33 +483,117 @@ include(FetchContent)
 set(BOOST_UT_DISABLE_MODULE
     ON
     CACHE BOOL "Disable UT Module Support" FORCE)
-FetchContent_Declare(
-  ut
-  GIT_REPOSITORY https://github.com/boost-ext/ut.git
-  GIT_TAG 53e17f25119598c6458d30351b260193096ba67e # latest tag as of 2023-04-02
-  EXCLUDE_FROM_ALL)
-
-FetchContent_Declare(
-  vir-simd
-  GIT_REPOSITORY https://github.com/mattkretz/vir-simd.git
-  GIT_TAG v0.4.4
-  EXCLUDE_FROM_ALL)
-
-FetchContent_Declare(
-  cpp-httplib
-  GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
-  GIT_TAG v0.18.1
-  EXCLUDE_FROM_ALL)
-
-if(NOT EMSCRIPTEN)
-  set(libsoundio_patch_command git apply --ignore-space-change --ignore-whitespace
-                               "${CMAKE_CURRENT_SOURCE_DIR}/patches/libsoundio-cmake4.diff")
+if(EMSCRIPTEN OR GR_USE_FETCHCONTENT_DEPS)
+  FetchContent_Declare(
+    ut
+    GIT_REPOSITORY https://github.com/boost-ext/ut.git
+    GIT_TAG 53e17f25119598c6458d30351b260193096ba67e # latest tag as of 2023-04-02
+    EXCLUDE_FROM_ALL)
 
   FetchContent_Declare(
-    libsoundio
-    GIT_REPOSITORY https://github.com/andrewrk/libsoundio.git
-    GIT_TAG 49a1f78b50eb0f5a49d096786a95a93874a2592a
-    PATCH_COMMAND ${libsoundio_patch_command} || true)
+    vir-simd
+    GIT_REPOSITORY https://github.com/mattkretz/vir-simd.git
+    GIT_TAG v0.4.4
+    EXCLUDE_FROM_ALL)
+else()
+  find_package(ut CONFIG QUIET)
+  if(TARGET Boost::ut AND NOT TARGET ut)
+    add_library(ut ALIAS Boost::ut)
+  elseif(TARGET boost::ut AND NOT TARGET ut)
+    add_library(ut ALIAS boost::ut)
+  endif()
+  if(NOT TARGET ut)
+    find_path(GR_BOOST_UT_INCLUDE_DIR boost/ut.hpp)
+    if(NOT GR_BOOST_UT_INCLUDE_DIR)
+      message(FATAL_ERROR "Boost.UT was not found. Install libboost-ext-ut-dev, ut-devel, or a source-built Boost.UT.")
+    endif()
+    add_library(ut INTERFACE)
+    target_include_directories(ut INTERFACE ${GR_BOOST_UT_INCLUDE_DIR})
+  endif()
+
+  find_path(vir-simd_SOURCE_DIR vir/simd.h)
+  if(NOT vir-simd_SOURCE_DIR)
+    message(
+      FATAL_ERROR
+        "vir-simd was not found. Install the vir headers under an include path, for example /usr/local/include/vir.")
+  endif()
+endif()
+
+if(EMSCRIPTEN)
+  FetchContent_Declare(
+    cpp-httplib
+    GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
+    GIT_TAG v0.18.1
+    EXCLUDE_FROM_ALL)
+else()
+  find_package(httplib CONFIG QUIET)
+  if(NOT TARGET httplib::httplib)
+    if(NOT PkgConfig_FOUND)
+      message(
+        FATAL_ERROR "cpp-httplib was not found and pkg-config is unavailable. Install cpp-httplib development files.")
+    endif()
+
+    pkg_search_module(
+      CPP_HTTPLIB
+      QUIET
+      IMPORTED_TARGET
+      cpp-httplib
+      httplib)
+    if(NOT CPP_HTTPLIB_FOUND)
+      message(FATAL_ERROR "cpp-httplib was not found. Install libcpp-httplib-dev, cpp-httplib-devel, or cpp-httplib.")
+    endif()
+    add_library(
+      httplib::httplib
+      INTERFACE
+      IMPORTED
+      GLOBAL)
+    target_link_libraries(httplib::httplib INTERFACE PkgConfig::CPP_HTTPLIB)
+  endif()
+endif()
+
+if(NOT EMSCRIPTEN)
+  if(PkgConfig_FOUND)
+    pkg_search_module(
+      LIBSOUNDIO
+      QUIET
+      soundio
+      libsoundio)
+  endif()
+
+  if(LIBSOUNDIO_FOUND)
+    set(GR_LIBSOUNDIO_INCLUDE_DIRS ${LIBSOUNDIO_INCLUDE_DIRS})
+    set(GR_LIBSOUNDIO_COMPILE_OPTIONS ${LIBSOUNDIO_CFLAGS_OTHER})
+    set(GR_LIBSOUNDIO_LINK_DIRECTORIES ${LIBSOUNDIO_LIBRARY_DIRS})
+    set(GR_LIBSOUNDIO_LINK_OPTIONS ${LIBSOUNDIO_LDFLAGS_OTHER})
+    set(GR_LIBSOUNDIO_LIBRARIES ${LIBSOUNDIO_LINK_LIBRARIES})
+    string(
+      REPLACE ";"
+              " "
+              GR_LIBSOUNDIO_PKGCONFIG_LIBS
+              "${LIBSOUNDIO_LDFLAGS}")
+  else()
+    find_path(GR_LIBSOUNDIO_INCLUDE_DIR soundio/soundio.h)
+    find_library(GR_LIBSOUNDIO_LIBRARY soundio)
+    if(NOT GR_LIBSOUNDIO_INCLUDE_DIR OR NOT GR_LIBSOUNDIO_LIBRARY)
+      message(FATAL_ERROR "libsoundio was not found. Install libsoundio-dev, libsoundio-devel, or libsoundio.")
+    endif()
+    set(GR_LIBSOUNDIO_INCLUDE_DIRS ${GR_LIBSOUNDIO_INCLUDE_DIR})
+    set(GR_LIBSOUNDIO_COMPILE_OPTIONS "")
+    set(GR_LIBSOUNDIO_LINK_DIRECTORIES "")
+    set(GR_LIBSOUNDIO_LINK_OPTIONS "")
+    set(GR_LIBSOUNDIO_LIBRARIES ${GR_LIBSOUNDIO_LIBRARY})
+    set(GR_LIBSOUNDIO_PKGCONFIG_LIBS "-lsoundio")
+  endif()
+
+  add_library(gr-libsoundio INTERFACE)
+  add_library(gnuradio4::gr-libsoundio ALIAS gr-libsoundio)
+  target_include_directories(gr-libsoundio INTERFACE ${GR_LIBSOUNDIO_INCLUDE_DIRS})
+  target_compile_options(gr-libsoundio INTERFACE ${GR_LIBSOUNDIO_COMPILE_OPTIONS})
+  target_link_directories(gr-libsoundio INTERFACE ${GR_LIBSOUNDIO_LINK_DIRECTORIES})
+  target_link_options(gr-libsoundio INTERFACE ${GR_LIBSOUNDIO_LINK_OPTIONS})
+  target_link_libraries(gr-libsoundio INTERFACE ${GR_LIBSOUNDIO_LIBRARIES})
+  string(APPEND GR4_PKGCONFIG_EXTRA_LIBS " ${GR_LIBSOUNDIO_PKGCONFIG_LIBS}")
+  install(TARGETS gr-libsoundio EXPORT gnuradio4Targets)
 endif()
 
 set(GR_HTTP_ENABLED TRUE) # Fetch API is always available
@@ -528,86 +614,56 @@ if(NOT
   endif()
 
   if(CURL_FOUND)
-    set(CPR_USE_SYSTEM_CURL
-        ON
-        CACHE BOOL "Use system libcurl in CPR" FORCE)
+    if(GR_USE_FETCHCONTENT_DEPS)
+      set(CPR_USE_SYSTEM_CURL
+          ON
+          CACHE BOOL "Use system libcurl in CPR" FORCE)
+      set(cpr_patch_command git apply --ignore-space-change --ignore-whitespace
+                            "${CMAKE_CURRENT_SOURCE_DIR}/patches/cpr-disable-std-fs-test.diff")
 
-    set(cpr_patch_command git apply --ignore-space-change --ignore-whitespace
-                          "${CMAKE_CURRENT_SOURCE_DIR}/patches/cpr-disable-std-fs-test.diff")
-
-    message(STATUS "${CMAKE_CURRENT_SOURCE_DIR}/patches/cpr-disable-std-fs-test.diff")
-
-    FetchContent_Declare(
-      cpr
-      GIT_REPOSITORY https://github.com/libcpr/cpr.git
-      GIT_TAG 1.14.1
-      PATCH_COMMAND ${cpr_patch_command} || true)
-
-    set(GR_HTTP_ENABLED TRUE)
-    string(APPEND GR4_PKGCONFIG_EXTRA_LIBS " -lcpr")
+      set(_saved_BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS})
+      set(BUILD_SHARED_LIBS ON)
+      FetchContent_Declare(
+        cpr
+        GIT_REPOSITORY https://github.com/libcpr/cpr.git
+        GIT_TAG 1.14.1
+        PATCH_COMMAND ${cpr_patch_command} || true)
+      FetchContent_MakeAvailable(cpr)
+      set(BUILD_SHARED_LIBS ${_saved_BUILD_SHARED_LIBS})
+    else()
+      find_package(cpr CONFIG QUIET)
+      if(TARGET cpr AND NOT TARGET cpr::cpr)
+        add_library(cpr::cpr ALIAS cpr)
+      endif()
+    endif()
+    if(TARGET cpr::cpr)
+      set(GR_HTTP_ENABLED TRUE)
+      string(APPEND GR4_PKGCONFIG_EXTRA_LIBS " -lcpr")
+    elseif(GR_ENABLE_HTTP STREQUAL "ON")
+      message(
+        FATAL_ERROR
+          "GR_ENABLE_HTTP is ON, but cpr was not found. Install libcpr-dev, cpr-devel, or set GR_ENABLE_HTTP=OFF/OPTIONAL."
+      )
+    endif()
   endif()
 elseif(GR_ENABLE_HTTP STREQUAL "OFF")
   set(GR_HTTP_ENABLED FALSE)
 endif()
 
-set(GR_FETCH_MAKE_AVAILABLE_DEPS ut vir-simd cpp-httplib)
-
-if(NOT EMSCRIPTEN)
-  list(APPEND GR_FETCH_MAKE_AVAILABLE_DEPS libsoundio)
-
-  set(BUILD_STATIC_LIBS
-      ON
-      CACHE BOOL "" FORCE)
-  set(BUILD_DYNAMIC_LIBS
-      OFF
-      CACHE BOOL "" FORCE)
-  set(BUILD_EXAMPLE_PROGRAMS
-      OFF
-      CACHE BOOL "" FORCE)
-  set(BUILD_TESTS
-      OFF
-      CACHE BOOL "" FORCE)
-  set(ENABLE_JACK
-      OFF
-      CACHE BOOL "" FORCE)
+set(GR_FETCH_MAKE_AVAILABLE_DEPS)
+if(EMSCRIPTEN OR GR_USE_FETCHCONTENT_DEPS)
+  list(
+    APPEND
+    GR_FETCH_MAKE_AVAILABLE_DEPS
+    ut
+    vir-simd)
+endif()
+if(EMSCRIPTEN)
+  list(APPEND GR_FETCH_MAKE_AVAILABLE_DEPS cpp-httplib)
 endif()
 
-FetchContent_MakeAvailable(${GR_FETCH_MAKE_AVAILABLE_DEPS})
-
-if(NOT EMSCRIPTEN)
-  target_include_directories(
-    libsoundio_static ${CMAKE_EXT_DEP_WARNING_GUARD} PUBLIC $<BUILD_INTERFACE:${libsoundio_SOURCE_DIR}>
-                                                            $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
-  add_library(gnuradio4::libsoundio_static ALIAS libsoundio_static)
-  if(APPLE)
-    find_library(GR_LIBSOUNDIO_COREAUDIO_LIBRARY CoreAudio REQUIRED)
-    find_library(GR_LIBSOUNDIO_COREFOUNDATION_LIBRARY CoreFoundation REQUIRED)
-    find_library(GR_LIBSOUNDIO_AUDIOUNIT_LIBRARY AudioUnit REQUIRED)
-    target_link_libraries(
-      libsoundio_static PUBLIC ${GR_LIBSOUNDIO_COREAUDIO_LIBRARY} ${GR_LIBSOUNDIO_COREFOUNDATION_LIBRARY}
-                               ${GR_LIBSOUNDIO_AUDIOUNIT_LIBRARY})
-  endif()
-  if(DEFINED ALSA_LIBRARY
-     AND NOT
-         ALSA_LIBRARY
-         MATCHES
-         "NOTFOUND")
-    target_link_libraries(libsoundio_static PUBLIC ${ALSA_LIBRARY})
-  endif()
-  if(DEFINED PULSEAUDIO_LIBRARY
-     AND NOT
-         PULSEAUDIO_LIBRARY
-         MATCHES
-         "NOTFOUND")
-    target_link_libraries(libsoundio_static PUBLIC ${PULSEAUDIO_LIBRARY})
-  endif()
-
-  install(TARGETS libsoundio_static EXPORT gnuradio4Targets)
-
-  add_library(gr-libsoundio INTERFACE)
-  add_library(gnuradio4::gr-libsoundio ALIAS gr-libsoundio)
-  target_link_libraries(gr-libsoundio INTERFACE libsoundio_static)
-  install(TARGETS gr-libsoundio EXPORT gnuradio4Targets)
+if(GR_FETCH_MAKE_AVAILABLE_DEPS)
+  FetchContent_MakeAvailable(${GR_FETCH_MAKE_AVAILABLE_DEPS})
 endif()
 
 if(EMSCRIPTEN AND TARGET ut)
@@ -627,21 +683,15 @@ if(EMSCRIPTEN AND TARGET ut)
   endif()
 endif()
 
-if(GR_HTTP_ENABLED AND NOT EMSCRIPTEN)
-  # build cpr as a shared library to avoid ODR violations when multiple block shared libraries (e.g. GrFileIoBlocks,
-  # GrHttpBlocks) each statically link their own copy of cpr globals
-  set(_saved_BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS})
-  set(BUILD_SHARED_LIBS ON)
-  FetchContent_MakeAvailable(cpr)
-  set(BUILD_SHARED_LIBS ${_saved_BUILD_SHARED_LIBS})
-endif()
-
 # GNURadio builds with hidden visibility by default. For shared CPR builds this hides CPR API symbols and causes
 # undefined references in downstream link steps.
 if(GR_HTTP_ENABLED
    AND NOT EMSCRIPTEN
-   AND TARGET cpr)
-  set_target_properties(cpr PROPERTIES CXX_VISIBILITY_PRESET default VISIBILITY_INLINES_HIDDEN OFF)
+   AND TARGET cpr::cpr)
+  get_target_property(_cpr_aliased_target cpr::cpr ALIASED_TARGET)
+  if(_cpr_aliased_target)
+    set_target_properties(${_cpr_aliased_target} PROPERTIES CXX_VISIBILITY_PRESET default VISIBILITY_INLINES_HIDDEN OFF)
+  endif()
 endif()
 
 # Fetch SoapySDR -- needed since the distribution version is incompatible w.r.t. stdlibc++ vs. libc++
