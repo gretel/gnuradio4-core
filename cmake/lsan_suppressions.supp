@@ -2,3 +2,6 @@
 leak:libSoapySDR
 # OpenSSL TLS init — freed only at process exit, not a real leak.
 leak:OPENSSL_init_crypto
+# Python runtime caches and module state intentionally survive until process exit.
+# This covers qa_PythonBlock, which embeds Python and leaves interpreter-owned state behind.
+leak:libpython3
