@@ -14,6 +14,10 @@
 
 #include <gnuradio-4.0/Message.hpp>
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wmacro-redefined"
+#endif
 #ifdef __GNUC__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wold-style-cast"
@@ -242,6 +246,9 @@ std::string sanitizedPythonBlockName() {
 } // namespace gr::python
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
+#endif
+#ifdef __clang__
+#pragma clang diagnostic pop
 #endif
 
 #include <format>
