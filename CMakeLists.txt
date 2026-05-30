@@ -24,7 +24,7 @@ set(GR_BUILD_PARALLEL_LEVEL
     "6"
     CACHE STRING "Maximum parallel compile/link jobs")
 option(GR4_USE_THIN_ARCHIVES "Build static archives as thin archives (non-relocatable when installed)" OFF)
-option(GR4_USE_LIBCXX "Force libc++ when compiling with Clang" ON)
+option(GR4_USE_LIBCXX "Force libc++ when compiling with Clang" OFF)
 if(CMAKE_GENERATOR MATCHES "Ninja")
   set_property(GLOBAL APPEND PROPERTY JOB_POOLS compile_pool=${GR_BUILD_PARALLEL_LEVEL} link_pool=2)
   set(CMAKE_JOB_POOL_COMPILE compile_pool)
@@ -375,11 +375,13 @@ if(CMAKE_CXX_COMPILER_ID MATCHES ".*Clang")
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -ftime-trace")
     message(STATUS "Enable TIMETRACE: ${TIMETRACE}")
   endif()
-elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+endif()
+
+if(CMAKE_CXX_COMPILER_ID MATCHES "(Clang|GNU)")
   if(ENABLE_TBB)
     find_package(TBB REQUIRED)
     target_link_libraries(gnuradio-options INTERFACE TBB::tbb)
-    set(GR4_PKGCONFIG_EXTRA_LIBS "-ltbb")
+    string(APPEND GR4_PKGCONFIG_EXTRA_LIBS " -ltbb")
   else()
     target_compile_definitions(gnuradio-options INTERFACE _GLIBCXX_USE_TBB_PAR_BACKEND=0)
   endif()
@@ -483,6 +485,7 @@ include(FetchContent)
 set(BOOST_UT_DISABLE_MODULE
     ON
     CACHE BOOL "Disable UT Module Support" FORCE)
+add_compile_definitions(BOOST_UT_DISABLE_MODULE)
 if(EMSCRIPTEN OR GR_USE_FETCHCONTENT_DEPS)
   FetchContent_Declare(
     ut
