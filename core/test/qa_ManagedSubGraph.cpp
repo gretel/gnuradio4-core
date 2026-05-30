@@ -412,7 +412,7 @@ const boost::ut::suite GraphInspectYamlTests_ = [] {
             });
 
         scheduler.requestStop();
-        schedulerThreadHandle.get();
+        expect(schedulerThreadHandle.get().has_value());
         expect(scheduler.changeStateTo(lifecycle::State::INITIALISED).has_value());
         expect(awaitCondition(scheduler, [&scheduler] { return scheduler.state() == lifecycle::State::INITIALISED; }));
     };
@@ -466,7 +466,7 @@ const boost::ut::suite SchedulerInspectTests_ = [] {
             });
 
         scheduler.requestStop();
-        schedulerThreadHandle.get();
+        expect(schedulerThreadHandle.get().has_value());
         expect(scheduler.changeStateTo(lifecycle::State::INITIALISED).has_value());
         expect(awaitCondition(scheduler, [&scheduler] { return scheduler.state() == lifecycle::State::INITIALISED; }));
     };
@@ -511,7 +511,7 @@ const boost::ut::suite SchedulerInspectTests_ = [] {
             });
 
         scheduler.requestStop();
-        schedulerThreadHandle.get();
+        expect(schedulerThreadHandle.get().has_value());
         expect(scheduler.changeStateTo(lifecycle::State::INITIALISED).has_value());
         expect(awaitCondition(scheduler, [&scheduler] { return scheduler.state() == lifecycle::State::INITIALISED; }));
     };
