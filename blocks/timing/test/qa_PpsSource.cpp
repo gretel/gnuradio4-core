@@ -21,7 +21,7 @@ const boost::ut::suite<"PpsSource"> ppsSourceTests = [] {
         gr::scheduler::Simple sched;
         expect(sched.exchange(std::move(testGraph)).has_value());
 
-        auto schedThread = std::thread([&sched] { sched.runAndWait(); });
+        auto schedThread = std::thread([&sched] { (void)sched.runAndWait(); });
         std::this_thread::sleep_for(std::chrono::milliseconds(2500));
 
         sched.requestStop();
@@ -67,7 +67,7 @@ const boost::ut::suite<"PpsSource"> ppsSourceTests = [] {
         gr::scheduler::Simple sched;
         expect(sched.exchange(std::move(testGraph)).has_value());
 
-        auto schedThread = std::thread([&sched] { sched.runAndWait(); });
+        auto schedThread = std::thread([&sched] { (void)sched.runAndWait(); });
         std::this_thread::sleep_for(std::chrono::milliseconds(2500));
 
         sched.requestStop();
@@ -89,7 +89,7 @@ const boost::ut::suite<"PpsSource"> ppsSourceTests = [] {
         gr::scheduler::Simple sched;
         expect(sched.exchange(std::move(testGraph)).has_value());
 
-        auto schedThread = std::thread([&sched] { sched.runAndWait(); });
+        auto schedThread = std::thread([&sched] { (void)sched.runAndWait(); });
         std::this_thread::sleep_for(std::chrono::milliseconds(2500));
 
         sched.requestStop();
@@ -115,7 +115,7 @@ const boost::ut::suite<"PpsSource"> ppsSourceTests = [] {
         gr::scheduler::Simple sched;
         expect(sched.exchange(std::move(testGraph)).has_value());
 
-        auto schedThread = std::thread([&sched] { sched.runAndWait(); });
+        auto schedThread = std::thread([&sched] { (void)sched.runAndWait(); });
         std::this_thread::sleep_for(std::chrono::milliseconds(2500));
 
         sched.requestStop();

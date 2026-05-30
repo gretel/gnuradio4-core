@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstring>
 #include <print>
+#include <string_view>
 
 #include <gnuradio-4.0/Block.hpp>
 #include <gnuradio-4.0/BlockRegistry.hpp>
@@ -137,28 +138,40 @@ Operating modes:
         if (!_device.isOpen()) {
             return;
         }
+        auto reportError = [this](auto&& result, std::string_view operation) {
+            if (!result) {
+                this->emitErrorMessage("settingsChanged()", std::format("{} failed: {}", operation, result.error()));
+                return false;
+            }
+            return true;
+        };
         if (newSettings.contains("frequency")) {
-            _device.setCenterFrequency(frequency);
+            if (!reportError(_device.setCenterFrequency(frequency), "setCenterFrequency")) {
+                return;
+            }
             _retuneRequested = true;
             forwardSettings.insert_or_assign(std::pmr::string("frequency"), frequency.value);
             forwardSettings.insert_or_assign(std::pmr::string("retune"), true);
         }
         if (newSettings.contains("gain") || newSettings.contains("auto_gain")) {
             if (auto_gain) {
-                _device.setGainMode(true);
+                reportError(_device.setGainMode(true), "setGainMode");
             } else {
-                _device.setGainMode(false);
-                _device.setTunerGain(gain);
+                if (reportError(_device.setGainMode(false), "setGainMode")) {
+                    reportError(_device.setTunerGain(gain), "setTunerGain");
+                }
             }
         }
         if (newSettings.contains("sample_rate")) {
-            _device.setSampleRate(sample_rate);
+            if (!reportError(_device.setSampleRate(sample_rate), "setSampleRate")) {
+                return;
+            }
             rebuildDcFilter();
             rebuildRateEstimator();
             forwardSettings.insert_or_assign(std::pmr::string("sample_rate"), sample_rate.value);
         }
         if (newSettings.contains("ppm_correction")) {
-            _device.setFreqCorrection(ppm_correction);
+            reportError(_device.setFreqCorrection(ppm_correction), "setFreqCorrection");
         }
         if (newSettings.contains("dc_blocker_cutoff") || newSettings.contains("dc_blocker_enabled")) {
             rebuildDcFilter();
@@ -198,19 +211,31 @@ Operating modes:
                     std::this_thread::sleep_for(std::chrono::seconds(2));
                     continue;
                 }
-                device_name = _device._deviceName;
-                _device.setSampleRate(sample_rate);
-                _device.setCenterFrequency(frequency);
-                if (auto_gain) {
-                    _device.setGainMode(true);
-                    _device.setAgcMode(true);
-                } else {
-                    _device.setGainMode(false);
-                    _device.setAgcMode(false);
-                    _device.setTunerGain(gain);
+                device_name          = _device._deviceName;
+                auto configureDevice = [this, &minDelay](auto&& configResult, std::string_view operation) {
+                    if (!configResult) {
+                        this->emitErrorMessage("ioReadLoop()", std::format("{} failed: {}", operation, configResult.error()));
+                        _device.close();
+                        std::this_thread::sleep_for(minDelay);
+                        return false;
+                    }
+                    return true;
+                };
+                if (!configureDevice(_device.setSampleRate(sample_rate), "setSampleRate") || !configureDevice(_device.setCenterFrequency(frequency), "setCenterFrequency")) {
+                    continue;
                 }
-                _device.setFreqCorrection(ppm_correction);
-                _device.resetBuffer();
+                if (auto_gain) {
+                    if (!configureDevice(_device.setGainMode(true), "setGainMode") || !configureDevice(_device.setAgcMode(true), "setAgcMode")) {
+                        continue;
+                    }
+                } else {
+                    if (!configureDevice(_device.setGainMode(false), "setGainMode") || !configureDevice(_device.setAgcMode(false), "setAgcMode") || !configureDevice(_device.setTunerGain(gain), "setTunerGain")) {
+                        continue;
+                    }
+                }
+                if (!configureDevice(_device.setFreqCorrection(ppm_correction), "setFreqCorrection") || !configureDevice(_device.resetBuffer(), "resetBuffer")) {
+                    continue;
+                }
                 _firstEmission  = true;
                 _lastTagTimeNs  = 0UL;
                 _ppmLastEmitted = 0.0f;

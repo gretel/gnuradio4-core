@@ -316,7 +316,7 @@ const boost::ut::suite<"RTL2832Source"> rtl2832Tests = [] {
         gr::scheduler::Simple sched;
         expect(sched.exchange(std::move(testGraph)).has_value());
 
-        auto schedThread = std::thread([&sched] { sched.runAndWait(); });
+        auto schedThread = std::thread([&sched] { (void)sched.runAndWait(); });
         std::this_thread::sleep_for(kCaptureDuration);
         sched.requestStop();
         schedThread.join();
@@ -367,7 +367,7 @@ const boost::ut::suite<"RTL2832Source"> rtl2832Tests = [] {
         gr::scheduler::Simple sched;
         expect(sched.exchange(std::move(testGraph)).has_value());
 
-        auto schedThread = std::thread([&sched] { sched.runAndWait(); });
+        auto schedThread = std::thread([&sched] { (void)sched.runAndWait(); });
         std::this_thread::sleep_for(kCaptureDuration);
         sched.requestStop();
         schedThread.join();
@@ -412,7 +412,7 @@ const boost::ut::suite<"RTL2832Source"> rtl2832Tests = [] {
         gr::scheduler::Simple sched;
         expect(sched.exchange(std::move(testGraph)).has_value());
 
-        auto schedThread = std::thread([&sched] { sched.runAndWait(); });
+        auto schedThread = std::thread([&sched] { (void)sched.runAndWait(); });
         std::this_thread::sleep_for(kCaptureDuration);
         sched.requestStop();
         schedThread.join();
@@ -526,7 +526,7 @@ const boost::ut::suite<"RTL2832Source"> rtl2832Tests = [] {
         gr::scheduler::Simple sched;
         expect(sched.exchange(std::move(testGraph)).has_value());
 
-        auto schedThread = std::thread([&sched] { sched.runAndWait(); });
+        auto schedThread = std::thread([&sched] { (void)sched.runAndWait(); });
         std::this_thread::sleep_for(kCaptureDuration);
         sched.requestStop();
         schedThread.join();
@@ -566,7 +566,7 @@ const boost::ut::suite<"RTL2832Source"> rtl2832Tests = [] {
         gr::scheduler::Simple sched;
         expect(sched.exchange(std::move(testGraph)).has_value());
 
-        auto schedThread = std::thread([&sched] { sched.runAndWait(); });
+        auto schedThread = std::thread([&sched] { (void)sched.runAndWait(); });
         std::this_thread::sleep_for(kCaptureDuration);
         sched.requestStop();
         schedThread.join();
@@ -617,7 +617,7 @@ const boost::ut::suite<"RTL2832Source"> rtl2832Tests = [] {
         gr::scheduler::Simple sched;
         expect(sched.exchange(std::move(testGraph)).has_value());
 
-        auto schedThread = std::thread([&sched] { sched.runAndWait(); });
+        auto schedThread = std::thread([&sched] { (void)sched.runAndWait(); });
         std::this_thread::sleep_for(kCaptureDuration);
         sched.requestStop();
         schedThread.join();
@@ -698,7 +698,7 @@ const boost::ut::suite<"RTL2832Source"> rtl2832Tests = [] {
         gr::scheduler::Simple sched;
         expect(sched.exchange(std::move(testGraph)).has_value());
 
-        auto schedThread = std::thread([&sched] { sched.runAndWait(); });
+        auto schedThread = std::thread([&sched] { (void)sched.runAndWait(); });
 
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
         sendNMEASequence(*pty, 0, 5, 80);

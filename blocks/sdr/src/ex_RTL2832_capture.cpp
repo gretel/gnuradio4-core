@@ -55,7 +55,7 @@ void runCapture() {
         return;
     }
 
-    auto schedThread = std::thread([&sched] { sched.runAndWait(); });
+    auto schedThread = std::thread([&sched] { (void)sched.runAndWait(); });
 
     auto           lastReport      = std::chrono::steady_clock::now();
     std::size_t    lastSamples     = 0UZ;

@@ -44,7 +44,7 @@ void runGraph(std::string_view devicePath) {
         return;
     }
 
-    auto schedThread = std::thread([&sched] { sched.runAndWait(); });
+    auto schedThread = std::thread([&sched] { (void)sched.runAndWait(); });
 
     while (!stopRequested.load(std::memory_order_relaxed)) {
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
