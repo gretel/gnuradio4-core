@@ -52,12 +52,10 @@ set(_STANDARD_BLOCK_INTEGRATION_TESTS
     qa_Messages
     qa_PerformanceMonitor)
 
-if(GR4_ENABLE_BLOCKS)
-  list(APPEND _CORE_TESTS ${_STANDARD_BLOCK_INTEGRATION_TESTS})
-  set(GR_TEST_HELPER_LIBRARIES gr-basic gr-fileio gr-math gr-testing gr-filter)
-else()
-  message(STATUS "Skipping standard-block integration tests in core-only mode: ${_STANDARD_BLOCK_INTEGRATION_TESTS}")
-endif()
+message(
+  STATUS
+    "Standard-block integration tests removed from gnuradio4-core and should move to gnuradio4-blocks or cross-repo CI: ${_STANDARD_BLOCK_INTEGRATION_TESTS}"
+)
 
 foreach(TEST_NAME IN LISTS _CORE_TESTS)
   add_ut_test(${TEST_NAME})
@@ -93,27 +91,8 @@ if(GR_ENABLE_BLOCK_REGISTRY AND INTERNAL_ENABLE_BLOCK_PLUGINS)
     bad_plugin)
 endif()
 
-if(GR4_ENABLE_BLOCKS AND GR_ENABLE_BLOCK_REGISTRY AND INTERNAL_ENABLE_BLOCK_PLUGINS)
-  add_ut_test(qa_Settings)
-
-  add_app_test(qa_grc)
-  gr_generate_block_instantiations(qa_grc HEADERS CollectionTestBlocks.hpp)
-  target_link_libraries(qa_grc PUBLIC gnuradio4::GrBasicBlocksShared gnuradio4::GrTestingBlocksShared)
-
-  add_ut_test(qa_GraphMessages)
-  target_link_libraries(qa_GraphMessages PUBLIC gnuradio4::GrBasicBlocksShared gnuradio4::GrTestingBlocksShared)
-
-  add_ut_test(qa_SchedulerMessages)
-  target_link_libraries(qa_SchedulerMessages PUBLIC gnuradio4::GrBasicBlocksShared gnuradio4::GrTestingBlocksShared)
-
-  add_app_test(qa_plugins_test)
-  target_link_libraries(qa_plugins_test PUBLIC gnuradio4::GrBasicBlocksShared gnuradio4::GrTestingBlocksShared)
-
-  add_app_test(qa_plugin_schedulers_test)
-  target_link_libraries(qa_plugin_schedulers_test PUBLIC gnuradio4::GrBasicBlocksShared
-                                                         gnuradio4::GrTestingBlocksShared)
-elseif(GR_ENABLE_BLOCK_REGISTRY AND INTERNAL_ENABLE_BLOCK_PLUGINS)
-  message(STATUS "Skipping standard-block registry/message integration tests in core-only mode")
+if(GR_ENABLE_BLOCK_REGISTRY AND INTERNAL_ENABLE_BLOCK_PLUGINS)
+  message(STATUS "Standard-block registry/message integration tests removed from gnuradio4-core")
 endif()
 
 if(GR_USE_ADAPTIVE_CPP)

@@ -155,6 +155,19 @@ jobs:
         shell: bash
         run: node ./core/src/main.js
 
+      - name: install core SDK
+        if: matrix.cmake_wrapper == null
+        shell: bash
+        run: cmake --install ../build --prefix "${{ runner.workspace }}/install-core"
+
+      - name: build installed SDK smoke project
+        if: matrix.cmake_wrapper == null
+        shell: bash
+        run: |
+          cmake -S test_external/minimal_blocklib -B "${{ runner.workspace }}/build-smoke" \
+            -DCMAKE_PREFIX_PATH="${{ runner.workspace }}/install-core"
+          cmake --build "${{ runner.workspace }}/build-smoke"
+
       - name: Show final sccache and build directory stats
         if: always()
         continue-on-error: true
@@ -206,6 +219,17 @@ jobs:
         working-directory: ${{runner.workspace}}/build
         shell: bash
         run: ctest --output-on-failure
+
+      - name: Install core SDK
+        shell: bash
+        run: cmake --install ../build --prefix "${{ runner.workspace }}/install-core"
+
+      - name: Build installed SDK smoke project
+        shell: bash
+        run: |
+          cmake -S test_external/minimal_blocklib -B "${{ runner.workspace }}/build-smoke" \
+            -DCMAKE_PREFIX_PATH="${{ runner.workspace }}/install-core"
+          cmake --build "${{ runner.workspace }}/build-smoke"
 
       - name: Generate coverage report
         working-directory: ${{runner.workspace}}/build

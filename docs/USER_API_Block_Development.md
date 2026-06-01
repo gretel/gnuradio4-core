@@ -1,5 +1,10 @@
 # GR4 Block Development — User-API Reference
 
+Note: Standard block examples referenced by name in this document are moving to
+the future `gnuradio4-blocks` repository. This core repository keeps the block
+API and blocklib SDK surface, but no longer carries the standard block source
+tree locally.
+
 GR4 blocks are `struct`s that inherit from `gr::Block<Derived>` via CRTP.
 Settings are (optionally) declared as `Annotated<T, "name", ...>` fields and exposed
 through compile-time reflection via `GR_MAKE_REFLECTABLE`. Blocks implement exactly one
@@ -125,7 +130,7 @@ void settingsChanged(const gr::property_map& /*old*/, const gr::property_map& ne
 | `gr::InputSpanLike`  | input spans — `consume(n)`, `tags()`, `rawTags`        |
 | `gr::OutputSpanLike` | output spans — `publish(n)`, `publishTag(map, offset)` |
 
-Reference: [`Selector.hpp`](../blocks/basic/include/gnuradio-4.0/basic/Selector.hpp) (dynamic ports), [`Soapy.hpp`](../blocks/soapy/include/gnuradio-4.0/soapy/Soapy.hpp) (conditional port count)
+Reference: `Selector.hpp` (dynamic ports), `Soapy.hpp` (conditional port count)
 
 ## Settings & `Annotated<T, ...>`
 
@@ -205,7 +210,7 @@ using gr::property_map = gr::pmt::Value::Map;  // std::pmr::map<std::pmr::string
 Settings are read and written as `property_map` key–value pairs where keys match
 the `snake_case` setting name and values are `pmt::Value`.
 
-Reference: [`Soapy.hpp`](../blocks/soapy/include/gnuradio-4.0/soapy/Soapy.hpp) (rich annotations), [`Rotator.hpp`](../blocks/math/include/gnuradio-4.0/math/Rotator.hpp) (XOR constraints)
+Reference: `Soapy.hpp` (rich annotations), `Rotator.hpp` (XOR constraints)
 
 ## Processing functions
 
@@ -348,7 +353,7 @@ requires std::is_arithmetic_v<T>
 | `INSUFFICIENT_OUTPUT_ITEMS` (-3) | need a larger output buffer           |
 | `ERROR` (-100)                   | error occurred                        |
 
-Reference: [`NullSources.hpp`](../blocks/testing/include/gnuradio-4.0/testing/NullSources.hpp) (source), [`CommonBlocks.hpp`](../blocks/basic/include/gnuradio-4.0/basic/CommonBlocks.hpp) (1:1), [`time_domain_filter.hpp`](../blocks/filter/include/gnuradio-4.0/filter/time_domain_filter.hpp) (history)
+Reference: `NullSources.hpp` (source), `CommonBlocks.hpp` (1:1), `time_domain_filter.hpp` (history)
 
 ## Resampling & decimation/interpolation
 
@@ -400,7 +405,7 @@ template<typename T>
 struct WindowedFFT : gr::Block<WindowedFFT<T>, gr::Stride<512U>> { ... };
 ```
 
-Reference: [`ConverterBlocks.hpp`](../blocks/basic/include/gnuradio-4.0/basic/ConverterBlocks.hpp) (`Resampling<1,2>` and `<2,1>`), [`time_domain_filter.hpp`](../blocks/filter/include/gnuradio-4.0/filter/time_domain_filter.hpp) (filter with history)
+Reference: `ConverterBlocks.hpp` (`Resampling<1,2>` and `<2,1>`), `time_domain_filter.hpp` (filter with history)
 
 ## Lifecycle methods
 
@@ -465,7 +470,7 @@ gr::lifecycle::isActive(this->state());       // true for RUNNING, REQUESTED_PAU
 gr::lifecycle::isShuttingDown(this->state()); // true for REQUESTED_STOP, STOPPED
 ```
 
-Reference: [`Soapy.hpp`](../blocks/soapy/include/gnuradio-4.0/soapy/Soapy.hpp) (start/stop with hardware), [`NullSources.hpp`](../blocks/testing/include/gnuradio-4.0/testing/NullSources.hpp) (`requestStop`)
+Reference: `Soapy.hpp` (start/stop with hardware), `NullSources.hpp` (`requestStop`)
 
 ## Settings change callback
 
@@ -513,7 +518,7 @@ if (newSettings.contains("frequency_shift") && !newSettings.contains("phase_incr
 }
 ```
 
-Reference: [`Rotator.hpp`](../blocks/math/include/gnuradio-4.0/math/Rotator.hpp) (XOR), [`Selector.hpp`](../blocks/basic/include/gnuradio-4.0/basic/Selector.hpp) (port resize + validation)
+Reference: `Rotator.hpp` (XOR), `Selector.hpp` (port resize + validation)
 
 ## Tags & streaming metadata
 
@@ -618,7 +623,7 @@ struct MyAccumulator : gr::Block<MyAccumulator, gr::Resampling<1024, 1024, true>
 | `"reset_default"`               | `bool`        | reset block to stored defaults     |
 | `"store_default"`               | `bool`        | store current settings as defaults |
 
-Reference: [`TagMonitors.hpp`](../blocks/testing/include/gnuradio-4.0/testing/TagMonitors.hpp) (TagSource, TagMonitor), [`ClockSource.hpp`](../blocks/testing/include/gnuradio-4.0/testing/ClockSource.hpp)
+Reference: `TagMonitors.hpp` (TagSource, TagMonitor), `ClockSource.hpp`
 
 ## Graph & connections
 
@@ -688,7 +693,7 @@ GR_REGISTER_BLOCK("gr::blocks::math::AddConst", gr::blocks::math::MathOpImpl,
 | `[float, double]`       | type list for expansion of corresponding `[T]`               |
 | `"custom::name"`        | optional custom registered name (default: deduced from type) |
 
-Reference: [`CommonBlocks.hpp`](../blocks/basic/include/gnuradio-4.0/basic/CommonBlocks.hpp), [`Math.hpp`](../blocks/math/include/gnuradio-4.0/math/Math.hpp), [`PowerEstimators.hpp`](../blocks/electrical/include/gnuradio-4.0/electrical/PowerEstimators.hpp), [`Soapy.hpp`](../blocks/soapy/include/gnuradio-4.0/soapy/Soapy.hpp)
+Reference: `CommonBlocks.hpp`, `Math.hpp`, `PowerEstimators.hpp`, `Soapy.hpp`
 
 ## Dos and don'ts
 
@@ -807,8 +812,8 @@ Reference: [`Block.hpp`](../core/include/gnuradio-4.0/Block.hpp) (`workInternal`
 - [`annotated.hpp`](../core/include/gnuradio-4.0/annotated.hpp) — `Annotated<T>`, `Limits`, `Doc`, `Unit`, `Visible`
 - [`Tag.hpp`](../core/include/gnuradio-4.0/Tag.hpp) — `Tag` struct and standard keys
 - [`LifeCycle.hpp`](../core/include/gnuradio-4.0/LifeCycle.hpp) — state machine (canonical diagram)
-- [`CommonBlocks.hpp`](../blocks/basic/include/gnuradio-4.0/basic/CommonBlocks.hpp) — simple reference blocks
-- [`Selector.hpp`](../blocks/basic/include/gnuradio-4.0/basic/Selector.hpp) — dynamic ports, tag routing
-- [`TagMonitors.hpp`](../blocks/testing/include/gnuradio-4.0/testing/TagMonitors.hpp) — tag handling patterns
-- [`NullSources.hpp`](../blocks/testing/include/gnuradio-4.0/testing/NullSources.hpp) — source/sink patterns
-- [`ConverterBlocks.hpp`](../blocks/basic/include/gnuradio-4.0/basic/ConverterBlocks.hpp) — resampling examples
+- `CommonBlocks.hpp` — simple reference blocks
+- `Selector.hpp` — dynamic ports, tag routing
+- `TagMonitors.hpp` — tag handling patterns
+- `NullSources.hpp` — source/sink patterns
+- `ConverterBlocks.hpp` — resampling examples

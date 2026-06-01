@@ -6,12 +6,6 @@
 	],
 	"include_paths": [
 		"./core/include/",
-		"./blocks/basic/include/",
-		"./blocks/filter/include/",
-		"./blocks/fourier/include/",
-		"./blocks/math/include/",
-		"./blocks/testing/include/",
-		"./algorithm/include/",
 		"./meta/include/",
 		"./build/_deps/vir-simd-src/",
 		"./build/_deps/pmt-src/include/",

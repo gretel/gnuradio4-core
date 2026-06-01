@@ -39,7 +39,7 @@ jobs:
         uses: Homebrew/actions/setup-homebrew@main
 
       - name: Install LLVM and sccache and dependencies
-        run: brew install ${{ matrix.compiler.brew_pkg }} sccache cpr cpp-httplib libsoundio pkgconf
+        run: brew install ${{ matrix.compiler.brew_pkg }} sccache cpp-httplib pkgconf
 
       - name: Log compiler version
         run: ${{ matrix.compiler.prefix }}/bin/clang --version
@@ -87,6 +87,15 @@ jobs:
       - name: Execute main binary
         working-directory: ${{ github.workspace }}/build
         run: ./core/src/main
+
+      - name: Install core SDK
+        run: cmake --install build --prefix "${{ github.workspace }}/install-core"
+
+      - name: Build installed SDK smoke project
+        run: |
+          cmake -S test_external/minimal_blocklib -B build-smoke \
+            -DCMAKE_PREFIX_PATH="${{ github.workspace }}/install-core"
+          cmake --build build-smoke
 
       - name: Show final sccache and build directory stats
         if: always()

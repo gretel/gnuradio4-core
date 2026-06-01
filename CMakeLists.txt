@@ -208,12 +208,6 @@ option(ENABLE_EXAMPLES "Enable Example Builds" ${GR_TOPLEVEL_PROJECT})
 option(ENABLE_TESTING "Enable Test Builds" ${GR_TOPLEVEL_PROJECT})
 option(MIT_ONLY "Exclude modules with non-MIT/Apache-compatible licences" OFF)
 option(GR_USE_FETCHCONTENT_DEPS "Allow CMake to download selected third-party dependencies with FetchContent" OFF)
-option(GR4_ENABLE_ALGORITHM "Build the in-tree gnuradio4 algorithm library" ON)
-option(GR4_ENABLE_BLOCKS "Build the in-tree standard block libraries" ON)
-
-if(GR4_ENABLE_BLOCKS AND NOT GR4_ENABLE_ALGORITHM)
-  message(FATAL_ERROR "GR4_ENABLE_BLOCKS=ON requires GR4_ENABLE_ALGORITHM=ON because standard block headers depend on algorithm headers.")
-endif()
 
 if(NOT DEFINED GR_DATA_CACHE_DIR)
   set(GR_DATA_CACHE_DIR
@@ -225,19 +219,7 @@ set(GR_MAX_WASM_THREAD_COUNT
     60
     CACHE STRING "Max number of threads for WASM pthread pool")
 add_compile_definitions(GR_MAX_WASM_THREAD_COUNT=${GR_MAX_WASM_THREAD_COUNT}) # propagate to C++
-set(GR_ENABLE_HTTP
-    "ON"
-    CACHE
-      STRING
-      "HTTP client support (libcurl wrapper): ON=enable and require libcurl (error if not found), OFF=disable, OPTIONAL=enable only if libcurl is found, otherwise disable"
-)
 set(GR4_PKGCONFIG_EXTRA_LIBS "")
-set_property(
-  CACHE GR_ENABLE_HTTP
-  PROPERTY STRINGS
-           ON
-           OFF
-           OPTIONAL)
 
 if(ENABLE_TESTING
    AND (UNIX
@@ -471,26 +453,6 @@ if(NOT (TARGET magic_enum))
     PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 endif()
 
-if(GR4_ENABLE_BLOCKS OR GR4_ENABLE_ALGORITHM)
-  # include exprtk header-only libraries available as a statically linked library to simplify/speed-up builds
-  add_library(
-    exprtk STATIC "${CMAKE_CURRENT_SOURCE_DIR}/third_party/exprtk.hpp"
-                  "${CMAKE_CURRENT_SOURCE_DIR}/third_party/exprtk.cpp" # dummy source file
-  )
-  add_library(gnuradio4::exprtk ALIAS exprtk)
-  target_include_directories(exprtk PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/third_party>
-                                           $<INSTALL_INTERFACE:include>)
-  if(EMSCRIPTEN)
-    target_compile_options(exprtk PRIVATE -O1 -g0)
-  else()
-    target_compile_options(exprtk PRIVATE -O1 -g0 -fvisibility=hidden)
-  endif()
-  set_source_files_properties(third_party/exprtk.cpp PROPERTIES COMPILE_OPTIONS "-fvisibility=hidden")
-  install(TARGETS exprtk EXPORT gnuradio4Targets)
-  install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/third_party/exprtk.hpp" DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-  # include exprtk header-only - END
-endif()
-
 include(FetchContent)
 
 set(BOOST_UT_DISABLE_MODULE
@@ -565,105 +527,7 @@ else()
   endif()
 endif()
 
-if(GR4_ENABLE_BLOCKS AND NOT EMSCRIPTEN)
-  if(PkgConfig_FOUND)
-    pkg_search_module(
-      LIBSOUNDIO
-      QUIET
-      soundio
-      libsoundio)
-  endif()
-
-  if(LIBSOUNDIO_FOUND)
-    set(GR_LIBSOUNDIO_INCLUDE_DIRS ${LIBSOUNDIO_INCLUDE_DIRS})
-    set(GR_LIBSOUNDIO_COMPILE_OPTIONS ${LIBSOUNDIO_CFLAGS_OTHER})
-    set(GR_LIBSOUNDIO_LINK_DIRECTORIES ${LIBSOUNDIO_LIBRARY_DIRS})
-    set(GR_LIBSOUNDIO_LINK_OPTIONS ${LIBSOUNDIO_LDFLAGS_OTHER})
-    set(GR_LIBSOUNDIO_LIBRARIES ${LIBSOUNDIO_LINK_LIBRARIES})
-    string(
-      REPLACE ";"
-              " "
-              GR_LIBSOUNDIO_PKGCONFIG_LIBS
-              "${LIBSOUNDIO_LDFLAGS}")
-  else()
-    find_path(GR_LIBSOUNDIO_INCLUDE_DIR soundio/soundio.h)
-    find_library(GR_LIBSOUNDIO_LIBRARY soundio)
-    if(NOT GR_LIBSOUNDIO_INCLUDE_DIR OR NOT GR_LIBSOUNDIO_LIBRARY)
-      message(FATAL_ERROR "libsoundio was not found. Install libsoundio-dev, libsoundio-devel, or libsoundio.")
-    endif()
-    set(GR_LIBSOUNDIO_INCLUDE_DIRS ${GR_LIBSOUNDIO_INCLUDE_DIR})
-    set(GR_LIBSOUNDIO_COMPILE_OPTIONS "")
-    set(GR_LIBSOUNDIO_LINK_DIRECTORIES "")
-    set(GR_LIBSOUNDIO_LINK_OPTIONS "")
-    set(GR_LIBSOUNDIO_LIBRARIES ${GR_LIBSOUNDIO_LIBRARY})
-    set(GR_LIBSOUNDIO_PKGCONFIG_LIBS "-lsoundio")
-  endif()
-
-  add_library(gr-libsoundio INTERFACE)
-  add_library(gnuradio4::gr-libsoundio ALIAS gr-libsoundio)
-  target_include_directories(gr-libsoundio INTERFACE ${GR_LIBSOUNDIO_INCLUDE_DIRS})
-  target_compile_options(gr-libsoundio INTERFACE ${GR_LIBSOUNDIO_COMPILE_OPTIONS})
-  target_link_directories(gr-libsoundio INTERFACE ${GR_LIBSOUNDIO_LINK_DIRECTORIES})
-  target_link_options(gr-libsoundio INTERFACE ${GR_LIBSOUNDIO_LINK_OPTIONS})
-  target_link_libraries(gr-libsoundio INTERFACE ${GR_LIBSOUNDIO_LIBRARIES})
-  string(APPEND GR4_PKGCONFIG_EXTRA_LIBS " ${GR_LIBSOUNDIO_PKGCONFIG_LIBS}")
-  install(TARGETS gr-libsoundio EXPORT gnuradio4Targets)
-endif()
-
-set(GR_HTTP_ENABLED TRUE) # Fetch API is always available
-# Native HTTP support using CPR and libCurl
-if(GR4_ENABLE_ALGORITHM
-   AND NOT
-   GR_ENABLE_HTTP
-   STREQUAL
-   "OFF"
-   AND NOT EMSCRIPTEN)
-  set(GR_HTTP_ENABLED FALSE)
-
-  find_package(CURL QUIET)
-
-  # ON  -> require libcurl (error if missing) OPTIONAL -> enable only if libcurl is found
-  if(GR_ENABLE_HTTP STREQUAL "ON" AND NOT CURL_FOUND)
-    message(FATAL_ERROR "GR_ENABLE_HTTP is ON, but libcurl was not found. "
-                        "Install libcurl (e.g. libcurl4-openssl-dev) or set GR_ENABLE_HTTP=OFF/OPTIONAL.")
-  endif()
-
-  if(CURL_FOUND)
-    if(GR_USE_FETCHCONTENT_DEPS)
-      set(CPR_USE_SYSTEM_CURL
-          ON
-          CACHE BOOL "Use system libcurl in CPR" FORCE)
-      set(cpr_patch_command git apply --ignore-space-change --ignore-whitespace
-                            "${CMAKE_CURRENT_SOURCE_DIR}/patches/cpr-disable-std-fs-test.diff")
-
-      set(_saved_BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS})
-      set(BUILD_SHARED_LIBS ON)
-      FetchContent_Declare(
-        cpr
-        GIT_REPOSITORY https://github.com/libcpr/cpr.git
-        GIT_TAG 1.14.1
-        PATCH_COMMAND ${cpr_patch_command} || true)
-      FetchContent_MakeAvailable(cpr)
-      set(BUILD_SHARED_LIBS ${_saved_BUILD_SHARED_LIBS})
-    else()
-      find_package(cpr CONFIG QUIET)
-      if(TARGET cpr AND NOT TARGET cpr::cpr)
-        add_library(cpr::cpr ALIAS cpr)
-      endif()
-    endif()
-    if(TARGET cpr::cpr)
-      set(GR_HTTP_ENABLED TRUE)
-      string(APPEND GR4_PKGCONFIG_EXTRA_LIBS " -lcpr")
-    elseif(GR_ENABLE_HTTP STREQUAL "ON")
-      message(
-        FATAL_ERROR
-          "GR_ENABLE_HTTP is ON, but cpr was not found. Install libcpr-dev, cpr-devel, or set GR_ENABLE_HTTP=OFF/OPTIONAL."
-      )
-    endif()
-  endif()
-elseif(GR_ENABLE_HTTP STREQUAL "OFF")
-  set(GR_HTTP_ENABLED FALSE)
-endif()
+set(GR_HTTP_ENABLED FALSE)
 
 set(GR_FETCH_MAKE_AVAILABLE_DEPS)
 if(EMSCRIPTEN OR GR_USE_FETCHCONTENT_DEPS)
@@ -696,23 +560,6 @@ if(EMSCRIPTEN AND TARGET ut)
     list(APPEND _ut_lopts -fexceptions)
     set_target_properties(ut PROPERTIES INTERFACE_LINK_OPTIONS "${_ut_lopts}")
   endif()
-endif()
-
-# GNURadio builds with hidden visibility by default. For shared CPR builds this hides CPR API symbols and causes
-# undefined references in downstream link steps.
-if(GR4_ENABLE_ALGORITHM
-   AND GR_HTTP_ENABLED
-   AND NOT EMSCRIPTEN
-   AND TARGET cpr::cpr)
-  get_target_property(_cpr_aliased_target cpr::cpr ALIASED_TARGET)
-  if(_cpr_aliased_target)
-    set_target_properties(${_cpr_aliased_target} PROPERTIES CXX_VISIBILITY_PRESET default VISIBILITY_INLINES_HIDDEN OFF)
-  endif()
-endif()
-
-# Fetch SoapySDR for SDR blocks.
-if(GR4_ENABLE_BLOCKS AND CMAKE_CXX_COMPILER_ID MATCHES "(GNU|Clang)") # WIP
-  find_package(SoapySDR CONFIG)
 endif()
 
 add_library(vir INTERFACE)
@@ -758,16 +605,6 @@ add_subdirectory(bench) # custom ut addon for microbenchmarking
 
 add_subdirectory(core)
 add_subdirectory(meta)
-if(GR4_ENABLE_ALGORITHM)
-  add_subdirectory(algorithm)
-else()
-  message(STATUS "Skipping in-tree algorithm library (GR4_ENABLE_ALGORITHM=OFF)")
-endif()
-if(GR4_ENABLE_BLOCKS)
-  add_subdirectory(blocks)
-else()
-  message(STATUS "Skipping in-tree standard block libraries (GR4_ENABLE_BLOCKS=OFF)")
-endif()
 
 if(ENABLE_TESTING
    AND (UNIX
@@ -893,9 +730,6 @@ message(STATUS "ENABLE_EXAMPLES              : ${ENABLE_EXAMPLES}")
 message(STATUS "ENABLE_TESTING               : ${ENABLE_TESTING}")
 message(STATUS "ENABLE_COVERAGE              : ${ENABLE_COVERAGE}")
 message(STATUS "GR_MAX_WASM_THREAD_COUNT     : ${GR_MAX_WASM_THREAD_COUNT}")
-message(STATUS "GR_ENABLE_HTTP               : ${GR_ENABLE_HTTP}")
-message(STATUS "GR4_ENABLE_ALGORITHM         : ${GR4_ENABLE_ALGORITHM}")
-message(STATUS "GR4_ENABLE_BLOCKS            : ${GR4_ENABLE_BLOCKS}")
 message(STATUS "------------------------------------------------")
 
 string(TOUPPER "${CMAKE_BUILD_TYPE}" _BT)

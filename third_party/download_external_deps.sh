@@ -3,7 +3,6 @@
 # list of git locations, their target folders, and content type
 declare -A git_locations=(
     ["https://api.github.com/repos/Neargye/magic_enum/contents/include?ref=v0.9.3"]="magic_enum multiple"
-    ["https://raw.githubusercontent.com/ArashPartow/exprtk/7b993904a21639304edd4db261f6e2cdcf6d936b/exprtk.hpp"]="exprtk single"
 )
 
 # Create a download function that can be used with parallel

@@ -21,6 +21,9 @@ RUN cmake -S . -B /build/gnuradio4 \
       -DADDRESS_SANITIZER=OFF \
     && cmake --build /build/gnuradio4 --parallel \
     && cmake --install /build/gnuradio4 \
+    && cmake -S test_external/minimal_blocklib -B /build/minimal-blocklib \
+      -DCMAKE_PREFIX_PATH=/opt/gnuradio4 \
+    && cmake --build /build/minimal-blocklib --parallel \
     && mkdir -p /opt/gnuradio4/share/gnuradio4-sdk \
     && printf 'git_sha=%s\nprefix=/opt/gnuradio4\n' "${GIT_SHA}" > /opt/gnuradio4/share/gnuradio4-sdk/manifest
 
