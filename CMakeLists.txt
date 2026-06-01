@@ -208,6 +208,12 @@ option(ENABLE_EXAMPLES "Enable Example Builds" ${GR_TOPLEVEL_PROJECT})
 option(ENABLE_TESTING "Enable Test Builds" ${GR_TOPLEVEL_PROJECT})
 option(MIT_ONLY "Exclude modules with non-MIT/Apache-compatible licences" OFF)
 option(GR_USE_FETCHCONTENT_DEPS "Allow CMake to download selected third-party dependencies with FetchContent" OFF)
+option(GR4_ENABLE_ALGORITHM "Build the in-tree gnuradio4 algorithm library" ON)
+option(GR4_ENABLE_BLOCKS "Build the in-tree standard block libraries" ON)
+
+if(GR4_ENABLE_BLOCKS AND NOT GR4_ENABLE_ALGORITHM)
+  message(FATAL_ERROR "GR4_ENABLE_BLOCKS=ON requires GR4_ENABLE_ALGORITHM=ON because standard block headers depend on algorithm headers.")
+endif()
 
 if(NOT DEFINED GR_DATA_CACHE_DIR)
   set(GR_DATA_CACHE_DIR
@@ -283,6 +289,9 @@ if(GR_USE_ADAPTIVE_CPP
 endif()
 
 include(cmake/CompilerWarnings.cmake)
+if(ENABLE_TESTING)
+  include(cmake/GnuRadioTestHelpers.cmake)
+endif()
 
 # blocklib_generator is a build process dependency, add it before everything
 add_subdirectory(blocklib_generator)
@@ -462,23 +471,25 @@ if(NOT (TARGET magic_enum))
     PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 endif()
 
-# include exprtk header-only libraries available as a statically linked library to simplify/speed-up builds
-add_library(
-  exprtk STATIC "${CMAKE_CURRENT_SOURCE_DIR}/third_party/exprtk.hpp"
-                "${CMAKE_CURRENT_SOURCE_DIR}/third_party/exprtk.cpp" # dummy source file
-)
-add_library(gnuradio4::exprtk ALIAS exprtk)
-target_include_directories(exprtk PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/third_party>
-                                         $<INSTALL_INTERFACE:include>)
-if(EMSCRIPTEN)
-  target_compile_options(exprtk PRIVATE -O1 -g0)
-else()
-  target_compile_options(exprtk PRIVATE -O1 -g0 -fvisibility=hidden)
+if(GR4_ENABLE_BLOCKS OR GR4_ENABLE_ALGORITHM)
+  # include exprtk header-only libraries available as a statically linked library to simplify/speed-up builds
+  add_library(
+    exprtk STATIC "${CMAKE_CURRENT_SOURCE_DIR}/third_party/exprtk.hpp"
+                  "${CMAKE_CURRENT_SOURCE_DIR}/third_party/exprtk.cpp" # dummy source file
+  )
+  add_library(gnuradio4::exprtk ALIAS exprtk)
+  target_include_directories(exprtk PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/third_party>
+                                           $<INSTALL_INTERFACE:include>)
+  if(EMSCRIPTEN)
+    target_compile_options(exprtk PRIVATE -O1 -g0)
+  else()
+    target_compile_options(exprtk PRIVATE -O1 -g0 -fvisibility=hidden)
+  endif()
+  set_source_files_properties(third_party/exprtk.cpp PROPERTIES COMPILE_OPTIONS "-fvisibility=hidden")
+  install(TARGETS exprtk EXPORT gnuradio4Targets)
+  install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/third_party/exprtk.hpp" DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+  # include exprtk header-only - END
 endif()
-set_source_files_properties(third_party/exprtk.cpp PROPERTIES COMPILE_OPTIONS "-fvisibility=hidden")
-install(TARGETS exprtk EXPORT gnuradio4Targets)
-install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/third_party/exprtk.hpp" DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-# include exprtk header-only - END
 
 include(FetchContent)
 
@@ -554,7 +565,7 @@ else()
   endif()
 endif()
 
-if(NOT EMSCRIPTEN)
+if(GR4_ENABLE_BLOCKS AND NOT EMSCRIPTEN)
   if(PkgConfig_FOUND)
     pkg_search_module(
       LIBSOUNDIO
@@ -601,7 +612,8 @@ endif()
 
 set(GR_HTTP_ENABLED TRUE) # Fetch API is always available
 # Native HTTP support using CPR and libCurl
-if(NOT
+if(GR4_ENABLE_ALGORITHM
+   AND NOT
    GR_ENABLE_HTTP
    STREQUAL
    "OFF"
@@ -688,7 +700,8 @@ endif()
 
 # GNURadio builds with hidden visibility by default. For shared CPR builds this hides CPR API symbols and causes
 # undefined references in downstream link steps.
-if(GR_HTTP_ENABLED
+if(GR4_ENABLE_ALGORITHM
+   AND GR_HTTP_ENABLED
    AND NOT EMSCRIPTEN
    AND TARGET cpr::cpr)
   get_target_property(_cpr_aliased_target cpr::cpr ALIASED_TARGET)
@@ -697,8 +710,8 @@ if(GR_HTTP_ENABLED
   endif()
 endif()
 
-# Fetch SoapySDR -- needed since the distribution version is incompatible w.r.t. stdlibc++ vs. libc++
-if(CMAKE_CXX_COMPILER_ID MATCHES "(GNU|Clang)") # WIP
+# Fetch SoapySDR for SDR blocks.
+if(GR4_ENABLE_BLOCKS AND CMAKE_CXX_COMPILER_ID MATCHES "(GNU|Clang)") # WIP
   find_package(SoapySDR CONFIG)
 endif()
 
@@ -745,8 +758,16 @@ add_subdirectory(bench) # custom ut addon for microbenchmarking
 
 add_subdirectory(core)
 add_subdirectory(meta)
-add_subdirectory(algorithm)
-add_subdirectory(blocks)
+if(GR4_ENABLE_ALGORITHM)
+  add_subdirectory(algorithm)
+else()
+  message(STATUS "Skipping in-tree algorithm library (GR4_ENABLE_ALGORITHM=OFF)")
+endif()
+if(GR4_ENABLE_BLOCKS)
+  add_subdirectory(blocks)
+else()
+  message(STATUS "Skipping in-tree standard block libraries (GR4_ENABLE_BLOCKS=OFF)")
+endif()
 
 if(ENABLE_TESTING
    AND (UNIX
@@ -817,6 +838,10 @@ if(ENABLE_TESTING
 endif()
 
 # Configure and install the pkg-config file TODO: This should become more granular - .pc for each in-tree module
+set(GR4_PKGCONFIG_PLUGIN_LIB "")
+if(TARGET gnuradio-plugin)
+  set(GR4_PKGCONFIG_PLUGIN_LIB " -lgnuradio-plugin")
+endif()
 configure_file(cmake/gnuradio4.pc.in ${CMAKE_CURRENT_BINARY_DIR}/gnuradio4.pc @ONLY)
 
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/gnuradio4.pc DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig # Standard location
@@ -869,6 +894,8 @@ message(STATUS "ENABLE_TESTING               : ${ENABLE_TESTING}")
 message(STATUS "ENABLE_COVERAGE              : ${ENABLE_COVERAGE}")
 message(STATUS "GR_MAX_WASM_THREAD_COUNT     : ${GR_MAX_WASM_THREAD_COUNT}")
 message(STATUS "GR_ENABLE_HTTP               : ${GR_ENABLE_HTTP}")
+message(STATUS "GR4_ENABLE_ALGORITHM         : ${GR4_ENABLE_ALGORITHM}")
+message(STATUS "GR4_ENABLE_BLOCKS            : ${GR4_ENABLE_BLOCKS}")
 message(STATUS "------------------------------------------------")
 
 string(TOUPPER "${CMAKE_BUILD_TYPE}" _BT)

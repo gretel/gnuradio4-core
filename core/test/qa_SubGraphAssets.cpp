@@ -16,7 +16,6 @@
 #include <gnuradio-4.0/BlockRegistry.hpp>
 #include <gnuradio-4.0/Graph_yaml_importer.hpp>
 #include <gnuradio-4.0/PluginLoader.hpp>
-#include <gnuradio-4.0/algorithm/fileio/FileIo.hpp>
 
 namespace ut = boost::ut;
 
@@ -25,7 +24,7 @@ namespace {
 const std::string kAssetsDir  = std::string(TESTS_SOURCE_PATH) + "/assets";
 const std::string kServerBase = "http://127.0.0.1:" + std::to_string(HTTP_SERVER_PORT);
 const std::string kCacheDir   = gr::detail::YamlDefinitionsLoader::assetsCacheDir() + "/asset_cache";
-const bool        kSkipRemote = std::getenv("GR_TEST_DISABLE_REMOTE") != nullptr;
+const bool        kSkipRemote = true;
 
 gr::PluginLoader makeLoader(const std::vector<std::string>& paths) {
     static gr::BlockRegistry     registry;
@@ -317,10 +316,8 @@ int main() {
     // ready signal, so probing is the only deterministic option here.
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
     while (std::chrono::steady_clock::now() < deadline) {
-        if (auto reader = gr::algorithm::fileio::readAsync(kServerBase + "/root_a/index.yaml"); reader) {
-            if (auto bytes = reader->get(); bytes && !bytes->empty()) {
-                break;
-            }
+        if (auto content = gr::detail::readUriToString(kServerBase + "/root_a/index.yaml"); content && !content->empty()) {
+            break;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(25));
     }

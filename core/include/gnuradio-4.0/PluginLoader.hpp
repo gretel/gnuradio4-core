@@ -22,7 +22,6 @@
 
 #include <gnuradio-4.0/PluginMetadata.hpp>
 #include <gnuradio-4.0/YamlPmt.hpp>
-#include <gnuradio-4.0/algorithm/fileio/FileIo.hpp>
 
 #ifdef INTERNAL_ENABLE_BLOCK_PLUGINS
 #include <dlfcn.h>
@@ -60,16 +59,19 @@ inline std::string joinUri(const std::string& base, const std::string& file) {
 }
 
 inline std::expected<std::string, ParseError> readUriToString(std::string_view uri) {
-    gr::algorithm::fileio::ReaderConfig config;
-    auto readerExp = gr::algorithm::fileio::readAsync(uri, config);
-    if (!readerExp) {
-        return std::unexpected(ParseError{.message = "Failed to read URI"});
+    const auto uriString = std::string(uri);
+    if (uriString.starts_with("http://") || uriString.starts_with("https://")) {
+        return std::unexpected(ParseError{.message = "HTTP(S) asset loading is not available in gnuradio4-core"});
     }
-    auto bytesExp = readerExp->get();
-    if (!bytesExp) {
-        return std::unexpected(ParseError{.message = "Failed to read URI"});
+
+    const auto path = uriString.starts_with("file://") ? uriString.substr(7) : uriString;
+    std::ifstream input(path, std::ios::binary);
+    if (!input) {
+        return std::unexpected(ParseError{.message = std::format("Failed to read URI {}", uriString)});
     }
-    return std::string(bytesExp->begin(), bytesExp->end());
+    std::ostringstream content;
+    content << input.rdbuf();
+    return content.str();
 }
 
 inline std::expected<std::chrono::sys_seconds, ParseError> parseTimestamp(const std::string& ts) {

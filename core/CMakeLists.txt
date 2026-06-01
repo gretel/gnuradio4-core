@@ -61,7 +61,6 @@ target_link_libraries(
   gnuradio-core
   PUBLIC gnuradio-options
          gnuradio-meta
-         gnuradio-algorithm
          magic_enum
          vir)
 

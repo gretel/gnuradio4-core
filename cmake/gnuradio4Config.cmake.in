@@ -7,8 +7,7 @@ if(@ENABLE_TBB@)
   find_dependency(TBB)
 endif()
 
-# gnuradio4::gnuradio-algorithm links cpr::cpr for native (non-Emscripten) HTTP support.
-if(@GR_HTTP_ENABLED@ AND NOT "@CMAKE_SYSTEM_NAME@" STREQUAL "Emscripten")
+if(@GR4_ENABLE_ALGORITHM@ AND @GR_HTTP_ENABLED@ AND NOT "@CMAKE_SYSTEM_NAME@" STREQUAL "Emscripten")
   find_dependency(cpr CONFIG)
 endif()
 
