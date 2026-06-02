@@ -10,7 +10,7 @@ permissions:
   packages: write
 
 env:
-  IMAGE_NAME: ghcr.io/gnuradio/gnuradio4-sdk
+  IMAGE_NAME: ghcr.io/gnuradio/gnuradio4-core-sdk
 
 jobs:
   publish:
@@ -45,9 +45,9 @@ jobs:
             ${{ env.IMAGE_NAME }}:${{ github.sha }}
             ${{ env.IMAGE_NAME }}:main
           labels: |
-            org.opencontainers.image.source=https://github.com/gnuradio/gnuradio4
+            org.opencontainers.image.source=https://github.com/gnuradio/gnuradio4-core
             org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.description=GNU Radio 4 SDK image for downstream out-of-tree module builds
+            org.opencontainers.image.description=GNU Radio 4 core SDK image for downstream out-of-tree module builds
             org.opencontainers.image.licenses=MIT
 
       - name: Validate SDK image contents

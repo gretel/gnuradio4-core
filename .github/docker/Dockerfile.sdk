@@ -19,21 +19,21 @@ RUN cmake -S . -B /build/gnuradio4 \
       -DENABLE_TESTING=OFF \
       -DENABLE_COVERAGE=OFF \
       -DADDRESS_SANITIZER=OFF \
-    && cmake --build /build/gnuradio4 --parallel \
+    && cmake --build /build/gnuradio4 --parallel 4 \
     && cmake --install /build/gnuradio4 \
     && cmake -S test_external/minimal_blocklib -B /build/minimal-blocklib \
       -DCMAKE_PREFIX_PATH=/opt/gnuradio4 \
-    && cmake --build /build/minimal-blocklib --parallel \
-    && mkdir -p /opt/gnuradio4/share/gnuradio4-sdk \
-    && printf 'git_sha=%s\nprefix=/opt/gnuradio4\n' "${GIT_SHA}" > /opt/gnuradio4/share/gnuradio4-sdk/manifest
+    && cmake --build /build/minimal-blocklib --parallel 4 \
+    && mkdir -p /opt/gnuradio4/share/gnuradio4-core-sdk \
+    && printf 'git_sha=%s\nprefix=/opt/gnuradio4\n' "${GIT_SHA}" > /opt/gnuradio4/share/gnuradio4-core-sdk/manifest
 
 FROM ghcr.io/gnuradio/ci:ubuntu-26.04-4.0 AS sdk
 
 ARG GIT_SHA=unknown
 
-LABEL org.opencontainers.image.source="https://github.com/gnuradio/gnuradio4" \
+LABEL org.opencontainers.image.source="https://github.com/gnuradio/gnuradio4-core" \
       org.opencontainers.image.revision="${GIT_SHA}" \
-      org.opencontainers.image.description="GNU Radio 4 SDK image for downstream out-of-tree module builds" \
+      org.opencontainers.image.description="GNU Radio 4 core SDK image for downstream out-of-tree module builds" \
       org.opencontainers.image.licenses="MIT"
 
 COPY --from=builder /opt/gnuradio4 /opt/gnuradio4

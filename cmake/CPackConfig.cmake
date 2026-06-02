@@ -1,9 +1,9 @@
-set(CPACK_PACKAGE_VENDOR "GNURadio")
-set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Prototype implementations for a more compile-time efficient flowgraph API")
+set(CPACK_PACKAGE_VENDOR "GNU Radio")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "GNU Radio 4 core runtime and SDK")
 set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
 set(CPACK_PACKAGE_CONTACT "admin@gnuradio.org")
 if(NOT CPACK_PACKAGE_NAME)
-  set(CPACK_PACKAGE_NAME "${PROJECT_NAME}${PROJECT_VERSION_MAJOR}")
+  set(CPACK_PACKAGE_NAME "gnuradio4-core")
 endif()
 
 if(UNIX)
