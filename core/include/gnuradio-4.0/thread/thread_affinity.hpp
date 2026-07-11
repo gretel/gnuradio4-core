@@ -15,9 +15,12 @@
 
 #include <gnuradio-4.0/meta/formatter.hpp>
 
-#if !defined(_WIN32) && (defined(__unix__) || defined(__unix) || (defined(__APPLE__) && defined(__MACH__))) || defined(__MINGW32__) // UNIX-style OS
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#elif !defined(_WIN32) && (defined(__unix__) || defined(__unix) || (defined(__APPLE__) && defined(__MACH__))) || defined(__MINGW32__) // UNIX-style OS
 #include <unistd.h>
-#if defined(_POSIX_THREADS) && not defined(__EMSCRIPTEN__)
+#if defined(_POSIX_THREADS) && not defined(__EMSCRIPTEN__) && not defined(__APPLE__)
 #include <pthread.h>
 #include <sched.h>
 #endif
@@ -69,11 +72,19 @@ concept thread_type = std::is_same_v<type, std::thread>;
 #endif
 
 namespace detail {
-#if defined(_POSIX_THREADS) && not defined(__EMSCRIPTEN__) && not defined(__APPLE__)
 template<typename Tp, typename... Us>
 constexpr decltype(auto) firstElement(Tp&& t, Us&&...) noexcept {
     return std::forward<Tp>(t);
 }
+#if defined(_WIN32)
+inline void* getThreadHandle(thread_type auto&... t) noexcept {
+    if constexpr (sizeof...(t) > 0) {
+        return firstElement(t...).native_handle(); // returns HANDLE (void*) on MinGW
+    } else {
+        return GetCurrentThread(); // pseudo-handle for current thread
+    }
+}
+#elif defined(_POSIX_THREADS) && not defined(__EMSCRIPTEN__) && not defined(__APPLE__)
 
 inline constexpr pthread_t getPosixHandler(thread_type auto&... t) noexcept {
     if constexpr (sizeof...(t) > 0) {
@@ -82,7 +93,28 @@ inline constexpr pthread_t getPosixHandler(thread_type auto&... t) noexcept {
         return pthread_self();
     }
 }
+#endif
 
+#if defined(_WIN32)
+inline std::string getThreadName(const void* handle) {
+    // Use GetThreadDescription on Win10+; fallback for older Windows
+    wchar_t* buf = nullptr;
+    if (handle == GetCurrentThread()) {
+        HRESULT hr = GetThreadDescription(GetCurrentThread(), &buf);
+        if (SUCCEEDED(hr) && buf) {
+            int len = WideCharToMultiByte(CP_UTF8, 0, buf, -1, nullptr, 0, nullptr, nullptr);
+            std::string name;
+            if (len > 0) {
+                name.resize(static_cast<std::size_t>(len) - 1);
+                WideCharToMultiByte(CP_UTF8, 0, buf, -1, name.data(), len, nullptr, nullptr);
+            }
+            LocalFree(buf);
+            return name.empty() ? "unnamed thread" : name;
+        }
+    }
+    return "unnamed thread";
+}
+#elif defined(_POSIX_THREADS) && not defined(__EMSCRIPTEN__) && not defined(__APPLE__)
 inline std::string getThreadName(const pthread_t& handle) {
     if (handle == 0U) {
         return "uninitialised thread";
@@ -93,27 +125,28 @@ inline std::string getThreadName(const pthread_t& handle) {
     }
     return std::string{threadName, strnlen(threadName, THREAD_MAX_NAME_LENGTH)};
 }
+#endif
 
-inline int getPid() { return getpid(); }
+#if !defined(_WIN32)
+inline int getPid() { 
+#if defined(_POSIX_THREADS) && not defined(__EMSCRIPTEN__) && not defined(__APPLE__)
+    return getpid();
 #else
-inline int getPid() { return 0; }
+    return 0;
+#endif
+}
 #endif
 } // namespace detail
 
-#if defined(_POSIX_VERSION) && not defined(__EMSCRIPTEN__) && not defined(__APPLE__)
-inline std::string getProcessName(const int pid = detail::getPid()) {
-    if (std::ifstream in(std::format("/proc/{}/comm", pid), std::ios::in); in.is_open()) {
-        std::string fileContent;
-        std::getline(in, fileContent, '\n');
-        return fileContent;
+#if defined(_WIN32)
+inline std::string getThreadName(thread_type auto&... thread) {
+    void* handle = detail::getThreadHandle(thread...);
+    if (handle == nullptr) {
+        throw std::system_error(THREAD_UNINITIALISED, thread_exception(), "getThreadName(thread_type)");
     }
-    return "unknown_process";
+    return detail::getThreadName(handle);
 }
-#else
-inline std::string getProcessName(const int /*pid*/ = -1) { return "unknown_process"; }
-#endif
-
-#if defined(_POSIX_THREADS) && not defined(__EMSCRIPTEN__) && not defined(__APPLE__)
+#elif defined(_POSIX_THREADS) && not defined(__EMSCRIPTEN__) && not defined(__APPLE__)
 inline std::string getThreadName(thread_type auto&... thread) {
     const pthread_t handle = detail::getPosixHandler(thread...);
     if (handle == 0U) {
@@ -125,20 +158,22 @@ inline std::string getThreadName(thread_type auto&... thread) {
 inline std::string getThreadName(thread_type auto&... /*thread*/) { return "unknown thread name"; }
 #endif
 
-#if defined(_POSIX_VERSION) && not defined(__EMSCRIPTEN__) && not defined(__APPLE__)
-inline void setProcessName(const std::string_view& processName, int pid = detail::getPid()) {
-    std::ofstream out(std::format("/proc/{}/comm", pid), std::ios::out);
-    if (!out.is_open()) {
-        throw std::system_error(THREAD_UNINITIALISED, thread_exception(), std::format("setProcessName({},{})", processName, pid));
+#if defined(_WIN32)
+inline void setThreadName(const std::string_view& threadName, thread_type auto&... thread) {
+    void* handle = detail::getThreadHandle(thread...);
+    if (handle == nullptr) {
+        throw std::system_error(THREAD_UNINITIALISED, thread_exception(), "setThreadName(thread_type)");
     }
-    out << std::string{processName.cbegin(), std::min(15LU, processName.size())};
-    out.close();
+    // Convert to wide string for SetThreadDescription
+    int wideLen = MultiByteToWideChar(CP_UTF8, 0, threadName.data(), static_cast<int>(threadName.size()), nullptr, 0);
+    std::wstring wideName(static_cast<std::size_t>(wideLen), L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, threadName.data(), static_cast<int>(threadName.size()), wideName.data(), wideLen);
+    HRESULT hr = SetThreadDescription(static_cast<HANDLE>(handle), wideName.c_str());
+    if (FAILED(hr)) {
+        throw std::system_error(hr, thread_exception(), std::format("setThreadName({}) - SetThreadDescription failed", threadName));
+    }
 }
-#else
-inline void setProcessName(const std::string_view& /*processName*/, int /*pid*/ = -1) {}
-#endif
-
-#if defined(_POSIX_THREADS) && not defined(__EMSCRIPTEN__) && not defined(__APPLE__)
+#elif defined(_POSIX_THREADS) && not defined(__EMSCRIPTEN__) && not defined(__APPLE__)
 inline void setThreadName(const std::string_view& threadName, thread_type auto&... thread) {
     const pthread_t handle = detail::getPosixHandler(thread...);
     if (handle == 0U) {
@@ -152,7 +187,112 @@ inline void setThreadName(const std::string_view& threadName, thread_type auto&.
 inline void setThreadName(const std::string_view& /*threadName*/, thread_type auto&... /*thread*/) {}
 #endif
 
-#if defined(_POSIX_VERSION) && not defined(__EMSCRIPTEN__) && not defined(__APPLE__)
+#if defined(_POSIX_VERSION) && not defined(__EMSCRIPTEN__) && not defined(__APPLE__) && !defined(_WIN32)
+inline std::string getProcessName(const int pid = detail::getPid()) {
+    if (std::ifstream in(std::format("/proc/{}/comm", pid), std::ios::in); in.is_open()) {
+        std::string fileContent;
+        std::getline(in, fileContent, '\n');
+        return fileContent;
+    }
+    return "unknown_process";
+}
+#else
+inline std::string getProcessName(const int /*pid*/ = -1) { return "unknown_process"; }
+#endif
+
+#if defined(_POSIX_VERSION) && not defined(__EMSCRIPTEN__) && not defined(__APPLE__) && !defined(_WIN32)
+inline void setProcessName(const std::string_view& processName, int pid = detail::getPid()) {
+    std::ofstream out(std::format("/proc/{}/comm", pid), std::ios::out);
+    if (!out.is_open()) {
+        throw std::system_error(THREAD_UNINITIALISED, thread_exception(), std::format("setProcessName({},{})", processName, pid));
+    }
+    out << std::string{processName.cbegin(), std::min(15LU, processName.size())};
+    out.close();
+}
+#else
+inline void setProcessName(const std::string_view& /*processName*/, int /*pid*/ = -1) {}
+#endif
+
+// ---- CPU affinity (Windows) ----
+#if defined(_WIN32)
+namespace detail {
+inline std::vector<bool> getAffinityMask(DWORD_PTR mask) {
+    std::vector<bool> bitMask(std::thread::hardware_concurrency());
+    for (size_t i = 0; i < bitMask.size(); i++) {
+        bitMask[i] = (mask & (1ULL << i)) != 0;
+    }
+    return bitMask;
+}
+
+inline DWORD_PTR getAffinityMask(const std::vector<bool>& threadMap) {
+    DWORD_PTR mask = 0;
+    size_t nMax = std::min(threadMap.size(), static_cast<size_t>(std::thread::hardware_concurrency()));
+    for (size_t i = 0; i < nMax; i++) {
+        if (threadMap[i]) {
+            mask |= (1ULL << i);
+        }
+    }
+    return mask;
+}
+} // namespace detail
+
+inline std::vector<bool> getThreadAffinity(thread_type auto&... thread) {
+    void* handle = detail::getThreadHandle(thread...);
+    if (handle == nullptr) {
+        throw std::system_error(THREAD_UNINITIALISED, thread_exception(), "getThreadAffinity(thread_type)");
+    }
+    // Windows has no GetThreadAffinityMask; query the process affinity as proxy
+    DWORD_PTR processMask, systemMask;
+    if (!GetProcessAffinityMask(GetCurrentProcess(), &processMask, &systemMask)) {
+        throw std::system_error(static_cast<int>(GetLastError()), thread_exception(), "getThreadAffinity() - GetProcessAffinityMask failed");
+    }
+    return detail::getAffinityMask(processMask & systemMask);
+}
+
+template<class T>
+requires requires(T value) { value[0]; }
+inline constexpr void setThreadAffinity(const T& threadMap, thread_type auto&... thread) {
+    void* handle = detail::getThreadHandle(thread...);
+    if (handle == nullptr) {
+        throw std::system_error(THREAD_UNINITIALISED, thread_exception(), "setThreadAffinity(thread_type)");
+    }
+    std::vector<bool> map;
+    if constexpr (std::is_same_v<std::decay_t<T>, std::vector<bool>>) {
+        map = threadMap;
+    } else {
+        map.assign(std::begin(threadMap), std::end(threadMap));
+    }
+    DWORD_PTR mask = detail::getAffinityMask(map);
+    if (SetThreadAffinityMask(static_cast<HANDLE>(handle), mask) == 0) {
+        throw std::system_error(static_cast<int>(GetLastError()), thread_exception(), "setThreadAffinity() - SetThreadAffinityMask failed");
+    }
+}
+
+inline std::vector<bool> getProcessAffinity(const int /*pid*/ = -1) {
+    DWORD_PTR processMask, systemMask;
+    if (!GetProcessAffinityMask(GetCurrentProcess(), &processMask, &systemMask)) {
+        throw std::system_error(static_cast<int>(GetLastError()), thread_exception(), "getProcessAffinity() - GetProcessAffinityMask failed");
+    }
+    return detail::getAffinityMask(processMask);
+}
+
+template<class T>
+requires requires(T value) { std::get<0>(value); }
+inline constexpr bool setProcessAffinity(const T& threadMap, const int /*pid*/ = -1) {
+    std::vector<bool> map;
+    if constexpr (std::is_same_v<std::decay_t<T>, std::vector<bool>>) {
+        map = threadMap;
+    } else {
+        map.assign(std::begin(threadMap), std::end(threadMap));
+    }
+    DWORD_PTR mask = detail::getAffinityMask(map);
+    if (!SetProcessAffinityMask(GetCurrentProcess(), mask)) {
+        throw std::system_error(static_cast<int>(GetLastError()), thread_exception(), "setProcessAffinity() - SetProcessAffinityMask failed");
+    }
+    return true;
+}
+
+#elif defined(_POSIX_VERSION) && not defined(__EMSCRIPTEN__) && not defined(__APPLE__)
 namespace detail {
 inline std::vector<bool> getAffinityMask(const cpu_set_t& cpuSet) {
     std::vector<bool> bitMask(std::min(sizeof(cpu_set_t), static_cast<size_t>(std::thread::hardware_concurrency())));
@@ -178,9 +318,7 @@ inline constexpr cpu_set_t getAffinityMask(const T& threadMap) {
     return cpuSet;
 }
 } // namespace detail
-#endif
 
-#if defined(_POSIX_VERSION) && not defined(__EMSCRIPTEN__) && not defined(__APPLE__)
 inline std::vector<bool> getThreadAffinity(thread_type auto&... thread) {
     const pthread_t handle = detail::getPosixHandler(thread...);
     if (handle == 0U) {
@@ -192,15 +330,9 @@ inline std::vector<bool> getThreadAffinity(thread_type auto&... thread) {
     }
     return detail::getAffinityMask(cpuSet);
 }
-#else
-std::vector<bool> getThreadAffinity(thread_type auto&...) {
-    return std::vector<bool>(std::thread::hardware_concurrency()); // cannot set affinity for non-posix threads
-}
-#endif
 
 template<class T>
 requires requires(T value) { value[0]; }
-#if defined(_POSIX_VERSION) && not defined(__EMSCRIPTEN__) && not defined(__APPLE__)
 inline constexpr void setThreadAffinity(const T& threadMap, thread_type auto&... thread) {
     const pthread_t handle = detail::getPosixHandler(thread...);
     if (handle == 0U) {
@@ -211,13 +343,7 @@ inline constexpr void setThreadAffinity(const T& threadMap, thread_type auto&...
         throw std::system_error(rc, thread_exception(), std::format("setThreadAffinity(std::vector<bool, {}> = {{{}}}, {})", threadMap.size(), gr::join(threadMap, ", "), detail::getThreadName(handle)));
     }
 }
-#else
-constexpr bool setThreadAffinity(const T& /*threadMap*/, thread_type auto&...) {
-    return false; // cannot set affinity for non-posix threads
-}
-#endif
 
-#if defined(_POSIX_VERSION) && not defined(__EMSCRIPTEN__) && not defined(__APPLE__)
 inline std::vector<bool> getProcessAffinity(const int pid = detail::getPid()) {
     if (pid <= 0) {
         throw std::system_error(THREAD_UNINITIALISED, thread_exception(), std::format("getProcessAffinity({}) -- invalid pid", pid));
@@ -229,13 +355,7 @@ inline std::vector<bool> getProcessAffinity(const int pid = detail::getPid()) {
     }
     return detail::getAffinityMask(cpuSet);
 }
-#else
-inline std::vector<bool> getProcessAffinity(const int /*pid*/ = -1) {
-    return std::vector<bool>(std::thread::hardware_concurrency()); // cannot set affinity for non-posix threads
-}
-#endif
 
-#if defined(_POSIX_VERSION) && not defined(__EMSCRIPTEN__) && not defined(__APPLE__)
 template<class T>
 requires requires(T value) { std::get<0>(value); }
 inline constexpr bool setProcessAffinity(const T& threadMap, const int pid = detail::getPid()) {
@@ -246,16 +366,30 @@ inline constexpr bool setProcessAffinity(const T& threadMap, const int pid = det
     if (int rc = sched_setaffinity(pid, sizeof(cpu_set_t), &cpuSet); rc != 0) {
         throw std::system_error(rc, thread_exception(), std::format("setProcessAffinity(std::vector<bool, {}> = {{{}}}, {})", threadMap.size(), gr::join(threadMap, ", "), pid));
     }
-
     return true;
 }
 #else
+std::vector<bool> getThreadAffinity(thread_type auto&...) {
+    return std::vector<bool>(std::thread::hardware_concurrency()); // cannot set affinity for non-posix threads
+}
+
+template<class T>
+requires requires(T value) { value[0]; }
+constexpr bool setThreadAffinity(const T& /*threadMap*/, thread_type auto&...) {
+    return false; // cannot set affinity for non-posix threads
+}
+
+inline std::vector<bool> getProcessAffinity(const int /*pid*/ = -1) {
+    return std::vector<bool>(std::thread::hardware_concurrency()); // cannot set affinity for non-posix threads
+}
+
 template<class T>
 requires requires(T value) { std::get<0>(value); }
 inline constexpr bool setProcessAffinity(const T& /*threadMap*/, const int /*pid*/ = -1) {
     return false; // cannot set affinity for non-posix threads
 }
 #endif
+
 enum Policy { UNKNOWN = -1, OTHER = 0, FIFO = 1, ROUND_ROBIN = 2 };
 } // namespace gr::thread_pool::thread
 
@@ -292,7 +426,15 @@ struct SchedulingParameter {
 namespace detail {
 inline Policy getEnumPolicy(const int policy) {
     switch (policy) {
-#if defined(_POSIX_THREADS) && not defined(__EMSCRIPTEN__) && not defined(__APPLE__)
+#if defined(_WIN32)
+    case THREAD_PRIORITY_LOWEST: return Policy::OTHER;
+    case THREAD_PRIORITY_BELOW_NORMAL: return Policy::OTHER;
+    case THREAD_PRIORITY_NORMAL: return Policy::OTHER;
+    case THREAD_PRIORITY_ABOVE_NORMAL: return Policy::OTHER;
+    case THREAD_PRIORITY_HIGHEST: return Policy::OTHER;
+    case THREAD_PRIORITY_TIME_CRITICAL: return Policy::FIFO;
+    case THREAD_PRIORITY_IDLE: return Policy::OTHER;
+#elif defined(_POSIX_THREADS) && not defined(__EMSCRIPTEN__) && not defined(__APPLE__) && !defined(_WIN32)
     case SCHED_FIFO: return Policy::FIFO;
     case SCHED_RR: return Policy::ROUND_ROBIN;
     case SCHED_OTHER: return Policy::OTHER;
@@ -302,11 +444,79 @@ inline Policy getEnumPolicy(const int policy) {
 }
 } // namespace detail
 
-#if defined(_POSIX_VERSION) && not defined(__EMSCRIPTEN__) && not defined(__APPLE__)
-inline struct SchedulingParameter getProcessSchedulingParameter(const int pid = detail::getPid()) {
-    if (pid <= 0) {
-        throw std::system_error(THREAD_UNINITIALISED, thread_exception(), std::format("getProcessSchedulingParameter({}) -- invalid pid", pid));
+// ---- Scheduling parameters (Windows) ----
+#if defined(_WIN32)
+inline struct SchedulingParameter getThreadSchedulingParameter(thread_type auto&... thread) {
+    void* handle = detail::getThreadHandle(thread...);
+    if (handle == nullptr) {
+        throw std::system_error(THREAD_UNINITIALISED, thread_exception(), "getThreadSchedulingParameter(thread_type)");
     }
+    int priority = GetThreadPriority(static_cast<HANDLE>(handle));
+    if (priority == THREAD_PRIORITY_ERROR_RETURN) {
+        throw std::system_error(static_cast<int>(GetLastError()), thread_exception(), "getThreadSchedulingParameter() - GetThreadPriority failed");
+    }
+    return SchedulingParameter{.policy = detail::getEnumPolicy(priority), .priority = priority};
+}
+
+inline void setThreadSchedulingParameter(Policy scheduler, int priority, thread_type auto&... thread) {
+    void* handle = detail::getThreadHandle(thread...);
+    if (handle == nullptr) {
+        throw std::system_error(THREAD_UNINITIALISED, thread_exception(), "setThreadSchedulingParameter(thread_type)");
+    }
+    // Map Policy to Windows priority class
+    int winPriority;
+    switch (scheduler) {
+    case Policy::FIFO:
+    case Policy::ROUND_ROBIN:
+        winPriority = THREAD_PRIORITY_TIME_CRITICAL;
+        break;
+    default:
+        // Clamp priority to valid Windows range (-2 to 2 for normal, -15 to 15 with special classes)
+        winPriority = std::clamp(priority, THREAD_PRIORITY_IDLE, THREAD_PRIORITY_TIME_CRITICAL);
+        break;
+    }
+    if (!SetThreadPriority(static_cast<HANDLE>(handle), winPriority)) {
+        throw std::system_error(static_cast<int>(GetLastError()), thread_exception(), std::format("setThreadSchedulingParameter({}, {}) - SetThreadPriority failed", scheduler, priority));
+    }
+}
+
+inline struct SchedulingParameter getProcessSchedulingParameter(const int /*pid*/ = -1) {
+    DWORD priorityClass = GetPriorityClass(GetCurrentProcess());
+    int winPriority = BELOW_NORMAL_PRIORITY_CLASS; // default
+    switch (priorityClass) {
+    case IDLE_PRIORITY_CLASS:         winPriority = THREAD_PRIORITY_IDLE; break;
+    case BELOW_NORMAL_PRIORITY_CLASS: winPriority = THREAD_PRIORITY_BELOW_NORMAL; break;
+    case NORMAL_PRIORITY_CLASS:       winPriority = THREAD_PRIORITY_NORMAL; break;
+    case ABOVE_NORMAL_PRIORITY_CLASS: winPriority = THREAD_PRIORITY_ABOVE_NORMAL; break;
+    case HIGH_PRIORITY_CLASS:         winPriority = THREAD_PRIORITY_HIGHEST; break;
+    case REALTIME_PRIORITY_CLASS:     winPriority = THREAD_PRIORITY_TIME_CRITICAL; break;
+    }
+    return SchedulingParameter{.policy = detail::getEnumPolicy(winPriority), .priority = winPriority};
+}
+
+inline void setProcessSchedulingParameter(Policy scheduler, int priority, const int /*pid*/ = -1) {
+    DWORD priorityClass;
+    switch (scheduler) {
+    case Policy::FIFO:
+    case Policy::ROUND_ROBIN:
+        priorityClass = REALTIME_PRIORITY_CLASS;
+        break;
+    default:
+        if (priority <= THREAD_PRIORITY_IDLE) priorityClass = IDLE_PRIORITY_CLASS;
+        else if (priority <= THREAD_PRIORITY_LOWEST) priorityClass = BELOW_NORMAL_PRIORITY_CLASS;
+        else if (priority <= THREAD_PRIORITY_NORMAL) priorityClass = NORMAL_PRIORITY_CLASS;
+        else if (priority <= THREAD_PRIORITY_ABOVE_NORMAL) priorityClass = ABOVE_NORMAL_PRIORITY_CLASS;
+        else if (priority <= THREAD_PRIORITY_HIGHEST) priorityClass = HIGH_PRIORITY_CLASS;
+        else priorityClass = REALTIME_PRIORITY_CLASS;
+        break;
+    }
+    if (!SetPriorityClass(GetCurrentProcess(), priorityClass)) {
+        throw std::system_error(static_cast<int>(GetLastError()), thread_exception(), std::format("setProcessSchedulingParameter({}, {}) - SetPriorityClass failed", scheduler, priority));
+    }
+}
+
+#elif defined(_POSIX_THREADS) && not defined(__EMSCRIPTEN__) && not defined(__APPLE__) && !defined(_WIN32)
+inline struct SchedulingParameter getProcessSchedulingParameter(const int pid = detail::getPid()) {
     struct sched_param param;
     const int          policy = sched_getscheduler(pid);
     if (int rc = sched_getparam(pid, &param); rc != 0) {
@@ -314,11 +524,7 @@ inline struct SchedulingParameter getProcessSchedulingParameter(const int pid = 
     }
     return SchedulingParameter{.policy = detail::getEnumPolicy(policy), .priority = param.sched_priority};
 }
-#else
-inline struct SchedulingParameter getProcessSchedulingParameter(const int /*pid*/ = -1) { return {}; }
-#endif
 
-#if defined(_POSIX_THREADS) && not defined(__EMSCRIPTEN__) && not defined(__APPLE__)
 inline void setProcessSchedulingParameter(Policy scheduler, int priority, const int pid = detail::getPid()) {
     if (pid <= 0) {
         throw std::system_error(THREAD_UNINITIALISED, thread_exception(), std::format("setProcessSchedulingParameter({}, {}, {}) -- invalid pid", scheduler, priority, pid));
@@ -337,11 +543,7 @@ inline void setProcessSchedulingParameter(Policy scheduler, int priority, const 
         throw std::system_error(rc, thread_exception(), std::format("setProcessSchedulingParameter({}, {}, {}) - sched_setscheduler return code: {}", scheduler, priority, pid, rc));
     }
 }
-#else
-inline void setProcessSchedulingParameter(Policy /*scheduler*/, int /*priority*/, const int /*pid*/ = -1) {}
-#endif
 
-#if defined(_POSIX_THREADS) && not defined(__EMSCRIPTEN__) && not defined(__APPLE__)
 inline struct SchedulingParameter getThreadSchedulingParameter(thread_type auto&... thread) {
     const pthread_t handle = detail::getPosixHandler(thread...);
     if (handle == 0U) {
@@ -354,11 +556,7 @@ inline struct SchedulingParameter getThreadSchedulingParameter(thread_type auto&
     }
     return {.policy = detail::getEnumPolicy(policy), .priority = param.sched_priority};
 }
-#else
-inline struct SchedulingParameter getThreadSchedulingParameter(thread_type auto&... /*thread*/) { return {}; }
-#endif
 
-#if defined(_POSIX_THREADS) && not defined(__EMSCRIPTEN__) && not defined(__APPLE__)
 inline void setThreadSchedulingParameter(Policy scheduler, int priority, thread_type auto&... thread) {
     const pthread_t handle = detail::getPosixHandler(thread...);
     if (handle == 0U) {
@@ -379,11 +577,14 @@ inline void setThreadSchedulingParameter(Policy scheduler, int priority, thread_
     }
 }
 #else
+inline struct SchedulingParameter getProcessSchedulingParameter(const int /*pid*/ = -1) { return {}; }
+inline void setProcessSchedulingParameter(Policy /*scheduler*/, int /*priority*/, const int /*pid*/ = -1) {}
+inline struct SchedulingParameter getThreadSchedulingParameter(thread_type auto&... /*thread*/) { return {}; }
 inline void setThreadSchedulingParameter(Policy /*scheduler*/, int /*priority*/, thread_type auto&... /*thread*/) {}
 #endif
 
 /// retrieve getThreadLimit()
-#if defined(__linux__) && !defined(__EMSCRIPTEN__)
+#if defined(__linux__) && !defined(__EMSCRIPTEN__) && !defined(_WIN32)
 namespace detail {
 inline std::size_t getUserProcessLimit() {
     struct rlimit rl;
@@ -408,7 +609,7 @@ inline std::size_t getKernelThreadLimit() {
 
 inline std::size_t getThreadLimit() {
     static const std::size_t limit = []() -> std::size_t {
-#if defined(__linux__) && !defined(__EMSCRIPTEN__)
+#if defined(__linux__) && !defined(__EMSCRIPTEN__) && !defined(_WIN32)
         // native Linux: use kernel/user process limits
         return std::min({detail::getUserProcessLimit(), detail::getKernelThreadLimit(), 50000UZ});
 #elif defined(__EMSCRIPTEN__)

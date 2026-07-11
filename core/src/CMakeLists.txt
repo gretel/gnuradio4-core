@@ -3,7 +3,7 @@ if(ENABLE_TESTS)
   add_subdirectory(benchmarks)
 endif()
 
-if(NOT EMSCRIPTEN)
+if(NOT EMSCRIPTEN AND INTERNAL_ENABLE_BLOCK_PLUGINS)
   add_library(gnuradio-plugin SHARED plugin.cpp)
   add_library(gnuradio4::gnuradio-plugin ALIAS gnuradio-plugin)
   set_target_properties(gnuradio-plugin PROPERTIES BUILD_WITH_INSTALL_RPATH ON)

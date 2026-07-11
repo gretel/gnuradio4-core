@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.27)
 
+if(WIN32 OR MINGW)
+    set(CMAKE_DL_LIBS "" CACHE INTERNAL "")
+endif()
+
 project(
   gnuradio
   VERSION 4.0.0

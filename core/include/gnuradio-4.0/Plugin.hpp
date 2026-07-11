@@ -5,7 +5,9 @@
 #include <string>
 #include <string_view>
 
+#if __has_include(<dlfcn.h>)
 #include <dlfcn.h>
+#endif
 
 #include "BlockRegistry.hpp"
 
