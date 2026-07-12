@@ -24,8 +24,8 @@ const boost::ut::suite ThreadAffinityTests = [] {
         expect(that % gr::thread_pool::thread::detail::getEnumPolicy(SCHED_RR) == gr::thread_pool::thread::Policy::ROUND_ROBIN);
         expect(that % gr::thread_pool::thread::detail::getEnumPolicy(SCHED_OTHER) == gr::thread_pool::thread::Policy::OTHER);
 #endif
-        expect(that % gr::thread_pool::thread::detail::getEnumPolicy(-1) == gr::thread_pool::thread::Policy::UNKNOWN);
-        expect(that % gr::thread_pool::thread::detail::getEnumPolicy(-2) == gr::thread_pool::thread::Policy::UNKNOWN);
+        expect(that % gr::thread_pool::thread::detail::getEnumPolicy(-100) == gr::thread_pool::thread::Policy::UNKNOWN);
+        expect(that % gr::thread_pool::thread::detail::getEnumPolicy(-200) == gr::thread_pool::thread::Policy::UNKNOWN);
     };
 
 #if not defined(__EMSCRIPTEN__) && not defined(__APPLE__) && not defined(_WIN32)
