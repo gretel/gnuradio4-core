@@ -215,7 +215,7 @@ std::optional<Message> BlockBase::propertyCallbackActiveContext(std::string_view
         const auto& dataMap = message.data.value();
 
         std::string contextStr;
-        if (auto it = dataMap.find(gr::tag::CONTEXT.shortKey()); it != dataMap.end()) {
+        if (auto it = dataMap.find(gr::tag::CONTEXT_KEY.shortKey()); it != dataMap.end()) {
             if (const auto str = it->second.value_or(std::string_view{}); str.data()) {
                 contextStr = str;
             } else {
@@ -245,7 +245,7 @@ std::optional<Message> BlockBase::propertyCallbackActiveContext(std::string_view
     if (message.cmd == Get || message.cmd == Set) {
         const auto& ctx = cbSettings().activeContext();
         message.data    = property_map{
-               {gr::tag::CONTEXT.shortKey(), ctx.context},  //
+               {gr::tag::CONTEXT_KEY.shortKey(), ctx.context},  //
                {gr::tag::CONTEXT_TIME.shortKey(), ctx.time} //
         };
         return message;
@@ -265,7 +265,7 @@ std::optional<Message> BlockBase::propertyCallbackSettingsCtx(std::string_view p
     const auto& dataMap = message.data.value();
 
     std::string contextStr;
-    if (auto it = dataMap.find(gr::tag::CONTEXT.shortKey()); it != dataMap.end()) {
+    if (auto it = dataMap.find(gr::tag::CONTEXT_KEY.shortKey()); it != dataMap.end()) {
         if (const auto str = it->second.value_or(std::string_view{}); str.data()) {
             contextStr = str;
         } else {
