@@ -6,13 +6,16 @@ configure_file(build_configure.hpp.in build_configure.hpp @ONLY)
 function(add_app_test TEST_NAME)
   add_executable(${TEST_NAME} ${TEST_NAME}.cpp)
   setup_test(${TEST_NAME})
-  target_link_libraries(${TEST_NAME} PRIVATE gnuradio-core gnuradio-blocklib-core gnuradio-plugin)
-  add_dependencies(
-    ${TEST_NAME}
-    GoodBasePlugin
-    good_math_plugin
-    good_conversion_plugin
-    bad_plugin)
+  target_link_libraries(${TEST_NAME} PRIVATE gnuradio-core gnuradio-blocklib-core)
+  if(NOT EMSCRIPTEN AND INTERNAL_ENABLE_BLOCK_PLUGINS)
+    target_link_libraries(${TEST_NAME} PRIVATE gnuradio-plugin)
+    add_dependencies(
+      ${TEST_NAME}
+      GoodBasePlugin
+      good_math_plugin
+      good_conversion_plugin
+      bad_plugin)
+  endif()
 endfunction()
 
 set(_CORE_TESTS

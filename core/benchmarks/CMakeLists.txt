@@ -6,9 +6,11 @@ if(NOT EMSCRIPTEN)
       PRIVATE gnuradio-options
               gnuradio-core
               gnuradio-blocklib-core
-              gnuradio-plugin
               ut
               ut-benchmark)
+    if(NOT EMSCRIPTEN AND INTERNAL_ENABLE_BLOCK_PLUGINS)
+      target_link_libraries(${BM_NAME} PRIVATE gnuradio-plugin)
+    endif()
     if(EMSCRIPTEN) # performance benchmarks should be optimised
       target_compile_options(${BM_NAME} PRIVATE -O3)
     else()
