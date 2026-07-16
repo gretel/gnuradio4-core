@@ -7,7 +7,7 @@ endif()
 project(
   gnuradio
   VERSION 4.0.0
-  LANGUAGES CXX)
+  LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
@@ -533,21 +533,13 @@ endif()
 
 # Windows: provide dlfcn functions via dlfcn-win32 when plugins are enabled
 if(WIN32 AND INTERNAL_ENABLE_BLOCK_PLUGINS)
-  FetchContent_Declare(dlfcn_win32
-    GIT_REPOSITORY https://github.com/dlfcn-win32/dlfcn-win32.git
-    GIT_TAG v1.4.2
-    GIT_SHALLOW TRUE)
-  if(POLICY CMP0169)
-    cmake_policy(SET CMP0169 OLD)
-  endif()
-  FetchContent_Populate(dlfcn_win32)
-  add_library(dl STATIC ${dlfcn_win32_SOURCE_DIR}/src/dlfcn.c)
-  target_include_directories(dl PUBLIC ${dlfcn_win32_SOURCE_DIR}/src)
+  add_library(dl STATIC third_party/dlfcn-win32/dlfcn.c)
+  target_include_directories(dl PUBLIC third_party/dlfcn-win32)
   target_compile_options(dl PRIVATE -w)
   install(TARGETS dl
     EXPORT gnuradio4Targets
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
-  install(FILES ${dlfcn_win32_SOURCE_DIR}/src/dlfcn.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+  install(FILES third_party/dlfcn-win32/dlfcn.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 endif()
 
 set(GR_HTTP_ENABLED FALSE)

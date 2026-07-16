@@ -76,7 +76,7 @@ if(WIN32)
   target_compile_definitions(gnuradio-core PUBLIC BUILDING_MYPLUGIN)
   if(INTERNAL_ENABLE_BLOCK_PLUGINS)
     target_include_directories(gnuradio-core PUBLIC
-      $<BUILD_INTERFACE:${dlfcn_win32_SOURCE_DIR}/src>
+      $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../third_party/dlfcn-win32>
       $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
   endif()
 endif()
