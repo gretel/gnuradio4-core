@@ -5,7 +5,7 @@
 #include <string>
 #include <string_view>
 
-#if __has_include(<dlfcn.h>)
+#ifdef INTERNAL_ENABLE_BLOCK_PLUGINS
 #include <dlfcn.h>
 #endif
 

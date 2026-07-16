@@ -531,6 +531,18 @@ else()
   endif()
 endif()
 
+# Windows: provide dlfcn functions via dlfcn-win32 when plugins are enabled
+if(WIN32 AND INTERNAL_ENABLE_BLOCK_PLUGINS AND NOT TARGET dl)
+  FetchContent_Declare(dlfcn_win32
+    GIT_REPOSITORY https://github.com/dlfcn-win32/dlfcn-win32.git
+    GIT_TAG v1.4.2
+    GIT_SHALLOW TRUE)
+  FetchContent_Populate(dlfcn_win32)
+  add_library(dl OBJECT ${dlfcn_win32_SOURCE_DIR}/src/dlfcn.c)
+  target_include_directories(dl PUBLIC ${dlfcn_win32_SOURCE_DIR}/src)
+  target_compile_options(dl PRIVATE -w)
+endif()
+
 set(GR_HTTP_ENABLED FALSE)
 
 set(GR_FETCH_MAKE_AVAILABLE_DEPS)

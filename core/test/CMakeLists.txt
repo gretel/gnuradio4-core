@@ -90,12 +90,25 @@ endif()
 if(GR_ENABLE_BLOCK_REGISTRY AND INTERNAL_ENABLE_BLOCK_PLUGINS)
   add_subdirectory(plugins)
 
-  add_dependencies(
-    qa_SubGraphAssets
-    GoodBasePlugin
-    good_math_plugin
-    good_conversion_plugin
-    bad_plugin)
+  if(TARGET qa_SubGraphAssets)
+    add_dependencies(
+      qa_SubGraphAssets
+      GoodBasePlugin
+      good_math_plugin
+      good_conversion_plugin
+      bad_plugin)
+  endif()
+
+  add_ut_test(qa_PluginLoader)
+  if(TARGET qa_PluginLoader)
+    add_dependencies(
+      qa_PluginLoader
+      qa_plugin
+      GoodBasePlugin
+      good_math_plugin
+      good_conversion_plugin
+      bad_plugin)
+  endif()
 endif()
 
 if(GR_ENABLE_BLOCK_REGISTRY AND INTERNAL_ENABLE_BLOCK_PLUGINS)
