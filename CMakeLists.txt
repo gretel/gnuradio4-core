@@ -537,6 +537,12 @@ if(WIN32 AND INTERNAL_ENABLE_BLOCK_PLUGINS AND NOT TARGET dl)
     GIT_REPOSITORY https://github.com/dlfcn-win32/dlfcn-win32.git
     GIT_TAG v1.4.2
     GIT_SHALLOW TRUE)
+  # FetchContent_Populate(details) is deprecated in CMake 3.30+/4.x; keep the
+  # old behaviour only for this small internal dependency so we can add
+  # dlfcn.c as an OBJECT library without installing a separate dl target.
+  if(POLICY CMP0169)
+    cmake_policy(SET CMP0169 OLD)
+  endif()
   FetchContent_Populate(dlfcn_win32)
   add_library(dl OBJECT ${dlfcn_win32_SOURCE_DIR}/src/dlfcn.c)
   target_include_directories(dl PUBLIC ${dlfcn_win32_SOURCE_DIR}/src)
