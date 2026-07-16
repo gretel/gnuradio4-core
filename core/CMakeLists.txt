@@ -75,11 +75,9 @@ target_link_libraries(gnuradio-blocklib-core PUBLIC gnuradio-core)
 if(WIN32)
   target_compile_definitions(gnuradio-core PUBLIC BUILDING_MYPLUGIN)
   if(INTERNAL_ENABLE_BLOCK_PLUGINS)
-    target_link_libraries(gnuradio-core PRIVATE dl)
     target_include_directories(gnuradio-core PUBLIC
       $<BUILD_INTERFACE:${dlfcn_win32_SOURCE_DIR}/src>
       $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
-    install(FILES ${dlfcn_win32_SOURCE_DIR}/src/dlfcn.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
   endif()
 endif()
 
