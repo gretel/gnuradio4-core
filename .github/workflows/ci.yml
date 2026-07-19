@@ -225,39 +225,80 @@ jobs:
 
   windows-build:
     name: "Windows ARM64 | LLVM MinGW | Debug"
-    runs-on: windows-11-vs2026-arm
+    runs-on: windows-11-arm
+    env:
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_MAXSIZE: 500M
+      CCACHE_COMPILERTYPE: clang
     defaults:
       run:
         shell: bash
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}-windows
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
+      - name: Cache ccache
+        id: cache-ccache
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/ccache-bin
+          key: ccache-4.13.6-windows-aarch64
+
+      - name: Cache ccache objects
+        id: cache-ccache-objects
+        uses: actions/cache@v6
+        with:
+          path: ~/.ccache
+          key: ccache-obj-windows-${{ hashFiles('CMakeLists.txt') }}
+          restore-keys: |
+            ccache-obj-windows-
+
+      - name: Cache LLVM MinGW
+        id: cache-mingw
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/llvm-mingw
+          key: llvm-mingw-20260616-ucrt-aarch64
+
       - name: Install dependencies
         shell: pwsh
         run: |
+          # ccache
+          $ccacheDir = "$env:RUNNER_TEMP\ccache-bin"
+          if (-not (Test-Path "$ccacheDir/ccache.exe")) {
+            Write-Host "Downloading ccache..."
+            $ccacheUrl = "https://github.com/ccache/ccache/releases/download/v4.13.6/ccache-4.13.6-windows-aarch64.zip"
+            $ccacheZip = "$env:RUNNER_TEMP\ccache.zip"
+            Invoke-WebRequest -Uri $ccacheUrl -OutFile $ccacheZip
+            Expand-Archive -Path $ccacheZip -DestinationPath $ccacheDir -Force
+            # Move files from nested dir up one level
+            if (Test-Path "$ccacheDir/ccache-4.13.6-windows-aarch64") {
+              Get-ChildItem "$ccacheDir/ccache-4.13.6-windows-aarch64" | Move-Item -Destination $ccacheDir
+              Remove-Item "$ccacheDir/ccache-4.13.6-windows-aarch64"
+            }
+            Write-Host "ccache downloaded and extracted"
+          } else {
+            Write-Host "ccache found in cache"
+          }
+          echo "$ccacheDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
           # LLVM MinGW toolchain
           $mingwUrl = "https://github.com/mstorsjo/llvm-mingw/releases/download/20260616/llvm-mingw-20260616-ucrt-aarch64.zip"
           $mingwZip = "$env:RUNNER_TEMP\llvm-mingw.zip"
           $mingwDest = "$env:RUNNER_TEMP\llvm-mingw"
-          Write-Host "Downloading LLVM MinGW..."
-          Invoke-WebRequest -Uri $mingwUrl -OutFile $mingwZip
-          Expand-Archive -Path $mingwZip -DestinationPath $mingwDest -Force
+          if (-not (Test-Path "$mingwDest/llvm-mingw-20260616-ucrt-aarch64")) {
+            Write-Host "Downloading LLVM MinGW..."
+            Invoke-WebRequest -Uri $mingwUrl -OutFile $mingwZip
+            Expand-Archive -Path $mingwZip -DestinationPath $mingwDest -Force
+          } else {
+            Write-Host "LLVM MinGW toolchain found in cache"
+          }
           $mingwBin = Join-Path $mingwDest "llvm-mingw-20260616-ucrt-aarch64" "bin"
           echo "$mingwBin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          # cpp-httplib - header-only, download header + create cmake config
-          $httplibDir = "$env:RUNNER_TEMP\httplib"
-          mkdir "$httplibDir\cmake" -Force | Out-Null
-          mkdir "$httplibDir\include" -Force | Out-Null
-          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/yhirose/cpp-httplib/v0.18.1/httplib.h" -OutFile "$httplibDir\include\httplib.h"
-          @"
-if(NOT TARGET httplib::httplib)
-  add_library(httplib::httplib INTERFACE IMPORTED)
-  target_include_directories(httplib::httplib INTERFACE \"\${CMAKE_CURRENT_LIST_DIR}/../include\")
-endif()
-"@ | Out-File -FilePath "$httplibDir\cmake\httplibConfig.cmake" -Encoding utf8
-          echo "CPP_HTTPLIB_DIR=$httplibDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Log compiler version
         run: clang++ --version
@@ -269,13 +310,13 @@ endif()
             -DCMAKE_BUILD_TYPE=Debug \
             -DCMAKE_CXX_COMPILER=clang++ \
             -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DDISABLE_EXTERNAL_DEPS_WARNINGS=ON \
             -DENABLE_COVERAGE=OFF \
             -DADDRESS_SANITIZER=OFF \
             -DGR_USE_FETCHCONTENT_DEPS=ON \
-            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
-            -DCMAKE_PREFIX_PATH="${{ env.CPP_HTTPLIB_DIR }}" \
-            -DCMAKE_INCLUDE_PATH="${{ env.CPP_HTTPLIB_DIR }}/include"
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
       - name: Build
         run: cmake --build build

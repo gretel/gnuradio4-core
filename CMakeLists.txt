@@ -43,9 +43,14 @@ endif()
 # default explicit compiler and linker flag optimisation per build type
 if(NOT MSVC)
   # optional:  -fno-inline-functions -fvar-tracking-assignments
-  set(CMAKE_CXX_FLAGS_DEBUG "-Og -g1 -gz -DDEBUG -fno-omit-frame-pointer -ffunction-sections -fdata-sections")
+set(CMAKE_CXX_FLAGS_DEBUG "-Og -g1 -DDEBUG -fno-omit-frame-pointer -ffunction-sections -fdata-sections")
+  set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g1 -DNDEBUG -ffunction-sections -fdata-sections")
+  if(NOT MINGW)
+    # MinGW toolchains lack zlib, so -gz warns. Just don't add it.
+    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -gz")
+    set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -gz")
+  endif()
   set(CMAKE_CXX_FLAGS_RELEASE "-O2 -g0 -DNDEBUG -ffunction-sections -fdata-sections")
-  set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g1 -gz -DNDEBUG -ffunction-sections -fdata-sections")
   set(CMAKE_CXX_FLAGS_RELWITHASSERT "-O2 -DASSERT_ENABLED -ffunction-sections -fdata-sections")
   # '-s': strip debug symbols, 'EMBEDDED is used to disable/minimise code features for embedded systems (e.g. code-size,
   # console printouts, etc.)
@@ -499,7 +504,7 @@ else()
   endif()
 endif()
 
-if(EMSCRIPTEN)
+if(EMSCRIPTEN OR GR_USE_FETCHCONTENT_DEPS)
   FetchContent_Declare(
     cpp-httplib
     GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
@@ -534,12 +539,12 @@ endif()
 # Windows: provide dlfcn functions via dlfcn-win32 when plugins are enabled
 if(WIN32 AND INTERNAL_ENABLE_BLOCK_PLUGINS)
   add_library(dl STATIC third_party/dlfcn-win32/dlfcn.c)
-  target_include_directories(dl PUBLIC third_party/dlfcn-win32)
+  target_include_directories(dl PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/third_party/dlfcn-win32)
   target_compile_options(dl PRIVATE -w)
   install(TARGETS dl
     EXPORT gnuradio4Targets
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
-  install(FILES third_party/dlfcn-win32/dlfcn.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+  install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/third_party/dlfcn-win32/dlfcn.h" DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 endif()
 
 set(GR_HTTP_ENABLED FALSE)
@@ -552,7 +557,7 @@ if(EMSCRIPTEN OR GR_USE_FETCHCONTENT_DEPS)
     ut
     vir-simd)
 endif()
-if(EMSCRIPTEN)
+if(EMSCRIPTEN OR GR_USE_FETCHCONTENT_DEPS)
   list(APPEND GR_FETCH_MAKE_AVAILABLE_DEPS cpp-httplib)
 endif()
 

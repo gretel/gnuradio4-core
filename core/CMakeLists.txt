@@ -78,6 +78,7 @@ if(WIN32)
     target_include_directories(gnuradio-core PUBLIC
       $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../third_party/dlfcn-win32>
       $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+    target_link_libraries(gnuradio-core PUBLIC dl)
   endif()
 endif()
 
