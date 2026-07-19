@@ -113,7 +113,7 @@ const boost::ut::suite<"gr::allocator::Logging"> _logging = [] {
         CounterLogger counters{};
         using Alloc = gr::allocator::Logging<int, gr::allocator::Default<int>, CounterLoggerRef>;
 
-        { std::vector<int, Alloc> v(0UZ, Alloc{{}, CounterLoggerRef{&counters}}); } // scope ends -> shrink_to_fit + dtor
+        { std::vector<int, Alloc> v(0UZ, Alloc{{}, CounterLoggerRef{&counters}}); v.resize(100UZ); } // alloc + dealloc via CounterLoggerRef
 
         expect(counters.alloc_count >= 1UZ) << "alloc_count (" << counters.alloc_count << ") >= 1";
         expect(counters.dealloc_count >= 1UZ) << "dealloc_count (" << counters.dealloc_count << ") >= 1";
