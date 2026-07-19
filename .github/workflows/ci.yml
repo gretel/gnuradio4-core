@@ -62,9 +62,7 @@ jobs:
     needs: [dco, restyled]
     runs-on: "ubuntu-latest"
     concurrency:
-      # Cancel running builds inside work (PR) branches, build all revisions for the main branch
-      group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}-${{ matrix.name }}
-      cancel-in-progress: true
+      group: ${{ github.workflow }}-${{ matrix.name }}-${{ github.run_id }}
     container:
       image: "${{ matrix.image }}"
     strategy:
@@ -234,8 +232,7 @@ jobs:
       run:
         shell: bash
     concurrency:
-      group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}-windows
-      cancel-in-progress: true
+      group: ${{ github.workflow }}-windows-${{ github.run_id }}
     steps:
       - uses: actions/checkout@v6
         with:
