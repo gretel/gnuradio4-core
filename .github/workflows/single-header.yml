@@ -14,6 +14,10 @@ jobs:
       with:
         fetch-depth: 100
 
+    - name: Install Boost.UT
+      shell: bash
+      run: sudo apt-get update && sudo apt-get install -y libboost-ext-ut-dev
+
     - name: Cache
       uses: actions/cache@v5
       env:
