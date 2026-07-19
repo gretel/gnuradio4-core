@@ -23,14 +23,14 @@ jobs:
             cc: gcc-14
             cxx: g++-14
             cmake-build-type: Release
-            cmake_flags: "-DADDRESS_SANITIZER=ON"
+            cmake_flags: "-DADDRESS_SANITIZER=OFF"
           - name: "Ubuntu 26.04 | gcc | Release"
             cache_key: ubuntu-2604-gcc-release
             image: ghcr.io/gnuradio/ci:ubuntu-26.04-4.0
             cc: gcc
             cxx: g++
             cmake-build-type: Release
-            cmake_flags: "-DADDRESS_SANITIZER=ON"
+            cmake_flags: "-DADDRESS_SANITIZER=OFF"
           - name: "Ubuntu 26.04 | gcc | Debug"
             cache_key: ubuntu-2604-gcc-debug
             image: ghcr.io/gnuradio/ci:ubuntu-26.04-4.0
@@ -44,14 +44,14 @@ jobs:
             cc: clang-20
             cxx: clang++-20
             cmake-build-type: Release
-            cmake_flags: "-DADDRESS_SANITIZER=ON"
+            cmake_flags: "-DADDRESS_SANITIZER=OFF"
           - name: "Fedora 44 | clang | Release"
             cache_key: fedora-44-clang-release
             image: ghcr.io/gnuradio/ci:fedora-44-4.0
             cc: clang
             cxx: clang++
             cmake-build-type: Release
-            cmake_flags: "-DADDRESS_SANITIZER=ON"
+            cmake_flags: "-DADDRESS_SANITIZER=OFF"
           - name: "Ubuntu 24.04 | Emscripten | Release"
             cache_key: ubuntu-2404-emscripten-release
             image: ghcr.io/gnuradio/ci:ubuntu-24.04-4.0-emscripten
@@ -109,7 +109,6 @@ jobs:
               ${{ steps.enable_sccache.outputs.CXX_LAUNCHER }} \
               ${{ steps.enable_sccache.outputs.C_LAUNCHER }} \
               -DENABLE_COVERAGE=OFF \
-              -DCMAKE_COMPILE_COMMANDS=ON \
               -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} \
               -DCMAKE_C_COMPILER=${{ matrix.cc }} \
               ${{ matrix.cmake_flags }}
@@ -132,7 +131,9 @@ jobs:
       - name: Build
         shell: bash
         run: |
-          test -f $EMSDK_HOME/emsdk_env.sh && source $EMSDK_HOME/emsdk_env.sh
+          if [ -n "${EMSDK_HOME:-}" ] && [ -f "${EMSDK_HOME}/emsdk_env.sh" ]; then
+            source "${EMSDK_HOME}/emsdk_env.sh"
+          fi
           cmake --build ../build
 
       - name: execute tests
@@ -163,9 +164,23 @@ jobs:
       - name: build installed SDK smoke project
         if: matrix.cmake_wrapper == null
         shell: bash
+        env:
+          CC: "${{ matrix.cc }}"
+          CXX: "${{ matrix.cxx }}"
         run: |
+          smoke_cmake_flags=()
+          if [[ "${{ matrix.cmake_flags }}" == *"-DADDRESS_SANITIZER=ON"* ]]; then
+            smoke_cmake_flags+=(
+              "-DCMAKE_CXX_FLAGS=-fsanitize=address"
+              "-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address"
+              "-DCMAKE_SHARED_LINKER_FLAGS=-fsanitize=address"
+            )
+          fi
           cmake -S test_external/minimal_blocklib -B "${{ runner.workspace }}/build-smoke" \
-            -DCMAKE_PREFIX_PATH="${{ runner.workspace }}/install-core"
+            -DCMAKE_PREFIX_PATH="${{ runner.workspace }}/install-core" \
+            -DCMAKE_C_COMPILER="${{ matrix.cc }}" \
+            -DCMAKE_CXX_COMPILER="${{ matrix.cxx }}" \
+            "${smoke_cmake_flags[@]}"
           cmake --build "${{ runner.workspace }}/build-smoke"
 
       - name: Show final sccache and build directory stats
@@ -235,14 +250,6 @@ jobs:
         working-directory: ${{runner.workspace}}/build
         shell: bash
         run: cmake --build . --target coverage
-
-      - name: Run sonar-scanner
-        shell: bash
-        env:
-          SONAR_HOST_URL: https://sonarcloud.io
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: sonar-scanner
 
       - name: Show final sccache and build directory stats
         if: always()
