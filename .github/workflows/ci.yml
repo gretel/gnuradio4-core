@@ -9,7 +9,7 @@ jobs:
     runs-on: "ubuntu-latest"
     steps:
       - name: Check commit signoffs
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const commits = await github.paginate(github.rest.pulls.listCommits, {
@@ -44,7 +44,7 @@ jobs:
           echo "Private forks are not supported for restyling" >&2
           exit 1
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name }}
           ref: ${{ github.event.pull_request.head.ref }}
@@ -62,7 +62,8 @@ jobs:
     needs: [dco, restyled]
     runs-on: "ubuntu-latest"
     concurrency:
-      group: ${{ github.workflow }}-${{ matrix.name }}-${{ github.run_id }}
+      group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}-${{ matrix.name }}
+      cancel-in-progress: true
     container:
       image: "${{ matrix.image }}"
     strategy:
@@ -99,7 +100,7 @@ jobs:
             cmake_flags: "-DENABLE_COVERAGE=OFF -DCMAKE_CROSSCOMPILING_EMULATOR=${SYSTEM_NODE} -DGNURADIO_PARSE_REGISTRATIONS_TOOL_CXX_COMPLILER=g++-14"
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -114,7 +115,7 @@ jobs:
         run: .github/ci-tools/setup_cmake_cache_flags.bash "${{ matrix.name }}"
 
       - name: Cache fetchContent
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         env:
           cache-name: cache-fetchContent-cache
         with:
@@ -232,31 +233,33 @@ jobs:
       run:
         shell: bash
     concurrency:
-      group: ${{ github.workflow }}-windows-${{ github.run_id }}
+      group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}-windows
+      cancel-in-progress: true
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - name: Cache ccache
+      - name: Restore ccache
         id: cache-ccache
-        uses: actions/cache@v6
+        uses: actions/cache/restore@v6
         with:
           path: ${{ runner.temp }}/ccache-bin
           key: ccache-4.13.6-windows-aarch64
 
-      - name: Cache ccache objects
+      - name: Restore ccache objects
         id: cache-ccache-objects
-        uses: actions/cache@v6
+        uses: actions/cache/restore@v6
         with:
           path: ~/.ccache
-          key: ccache-obj-windows-${{ hashFiles('CMakeLists.txt') }}
+          key: ccache-obj-${{ github.head_ref || github.run_id }}-${{ hashFiles('CMakeLists.txt', 'core/CMakeLists.txt') }}
           restore-keys: |
-            ccache-obj-windows-
+            ccache-obj-${{ github.head_ref || github.run_id }}-
+            ccache-obj-
 
-      - name: Cache LLVM MinGW
+      - name: Restore LLVM MinGW
         id: cache-mingw
-        uses: actions/cache@v6
+        uses: actions/cache/restore@v6
         with:
           path: ${{ runner.temp }}/llvm-mingw
           key: llvm-mingw-20260616-ucrt-aarch64
@@ -297,6 +300,22 @@ jobs:
           $mingwBin = Join-Path $mingwDest "llvm-mingw-20260616-ucrt-aarch64" "bin"
           echo "$mingwBin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
+      - name: Save ccache binary
+        id: save-ccache
+        if: always()
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ runner.temp }}/ccache-bin
+          key: ccache-4.13.6-windows-aarch64
+
+      - name: Save LLVM MinGW
+        id: save-mingw
+        if: always()
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ runner.temp }}/llvm-mingw
+          key: llvm-mingw-20260616-ucrt-aarch64
+
       - name: Log compiler version
         run: clang++ --version
 
@@ -317,6 +336,14 @@ jobs:
 
       - name: Build
         run: cmake --build build
+
+      - name: Save ccache objects
+        id: save-ccache-objects
+        if: always()
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.ccache
+          key: ccache-obj-${{ github.head_ref || github.run_id }}-${{ hashFiles('CMakeLists.txt', 'core/CMakeLists.txt') }}
 
       - name: Execute tests
         env:
