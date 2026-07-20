@@ -378,7 +378,10 @@ public:
 
     ~Profiler() {
         gr::atomic_ref(_finished).store_release(true);
-        gr::atomic_ref(_consumer_done).wait(false);
+        auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (!gr::atomic_ref(_consumer_done).load_acquire() && std::chrono::steady_clock::now() < deadline) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
     }
 
     Profiler(const Profiler&)            = delete;

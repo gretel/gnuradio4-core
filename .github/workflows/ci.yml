@@ -9,7 +9,7 @@ jobs:
     runs-on: "ubuntu-latest"
     steps:
       - name: Check commit signoffs
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const commits = await github.paginate(github.rest.pulls.listCommits, {
@@ -44,7 +44,7 @@ jobs:
           echo "Private forks are not supported for restyling" >&2
           exit 1
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name }}
           ref: ${{ github.event.pull_request.head.ref }}
@@ -62,7 +62,6 @@ jobs:
     needs: [dco, restyled]
     runs-on: "ubuntu-latest"
     concurrency:
-      # Cancel running builds inside work (PR) branches, build all revisions for the main branch
       group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}-${{ matrix.name }}
       cancel-in-progress: true
     container:
@@ -101,7 +100,7 @@ jobs:
             cmake_flags: "-DENABLE_COVERAGE=OFF -DCMAKE_CROSSCOMPILING_EMULATOR=${SYSTEM_NODE} -DGNURADIO_PARSE_REGISTRATIONS_TOOL_CXX_COMPLILER=g++-14"
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -116,7 +115,7 @@ jobs:
         run: .github/ci-tools/setup_cmake_cache_flags.bash "${{ matrix.name }}"
 
       - name: Cache fetchContent
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         env:
           cache-name: cache-fetchContent-cache
         with:
@@ -132,28 +131,6 @@ jobs:
           CC: "${{ matrix.cc }}"
           CXX: "${{ matrix.cxx }}"
         run: >
-          cmake \
-            -S . \
-            -B ../build \
-            -DCMAKE_COLOR_DIAGNOSTICS=ON \
-            -DDISABLE_EXTERNAL_DEPS_WARNINGS=ON \
-            -DCMAKE_BUILD_TYPE=${{ matrix.cmake-build-type }} \
-            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
-            ${{ steps.enable_sccache.outputs.CXX_LAUNCHER }} \
-            ${{ steps.enable_sccache.outputs.C_LAUNCHER }} \
-            -DENABLE_COVERAGE=OFF \
-            ${{ matrix.cmake_flags }}
-
-      - name: Configure AdaptiveCpp
-        if: matrix.cxx == 'acpp'
-        shell: bash
-        env:
-          CC: "${{ matrix.cc }}"
-          CXX: "${{ matrix.cxx }}"
-          ACPP_TARGETS: omp
-        run: >
-          which acpp &&
-          acpp --version &&
           cmake \
             -S . \
             -B ../build \
@@ -187,7 +164,9 @@ jobs:
       - name: Build
         shell: bash
         run: |
-          test -f $EMSDK_HOME/emsdk_env.sh && source $EMSDK_HOME/emsdk_env.sh
+          if [ -n "${EMSDK_HOME:-}" ] && [ -f "${EMSDK_HOME}/emsdk_env.sh" ]; then
+            source "${EMSDK_HOME}/emsdk_env.sh"
+          fi
           cmake --build ../build
 
       - name: execute tests
@@ -218,9 +197,23 @@ jobs:
       - name: build installed SDK smoke project
         if: matrix.cmake_wrapper == null
         shell: bash
+        env:
+          CC: "${{ matrix.cc }}"
+          CXX: "${{ matrix.cxx }}"
         run: |
+          smoke_cmake_flags=()
+          if [[ "${{ matrix.cmake_flags }}" == *"-DADDRESS_SANITIZER=ON"* ]]; then
+            smoke_cmake_flags+=(
+              "-DCMAKE_CXX_FLAGS=-fsanitize=address"
+              "-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address"
+              "-DCMAKE_SHARED_LINKER_FLAGS=-fsanitize=address"
+            )
+          fi
           cmake -S test_external/minimal_blocklib -B "${{ runner.workspace }}/build-smoke" \
-            -DCMAKE_PREFIX_PATH="${{ runner.workspace }}/install-core"
+            -DCMAKE_PREFIX_PATH="${{ runner.workspace }}/install-core" \
+            -DCMAKE_C_COMPILER="${{ matrix.cc }}" \
+            -DCMAKE_CXX_COMPILER="${{ matrix.cxx }}" \
+            "${smoke_cmake_flags[@]}"
           cmake --build "${{ runner.workspace }}/build-smoke"
 
       - name: Show final sccache and build directory stats
@@ -228,3 +221,148 @@ jobs:
         continue-on-error: true
         shell: bash
         run: ./.github/ci-tools/build-summary.sh "${{ matrix.name }}" "../build"
+
+  windows-build:
+    name: "Windows ARM64 | LLVM MinGW | Debug"
+    runs-on: windows-11-arm
+    env:
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_MAXSIZE: 500M
+      CCACHE_COMPILERTYPE: clang
+    defaults:
+      run:
+        shell: bash
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}-windows
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Restore ccache
+        id: cache-ccache
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ runner.temp }}/ccache-bin
+          key: ccache-4.13.6-windows-aarch64
+
+      - name: Restore ccache objects
+        id: cache-ccache-objects
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.ccache
+          key: ccache-obj-${{ github.head_ref || github.run_id }}-${{ hashFiles('CMakeLists.txt', 'core/CMakeLists.txt') }}
+          restore-keys: |
+            ccache-obj-${{ github.head_ref || github.run_id }}-
+            ccache-obj-
+
+      - name: Restore LLVM MinGW
+        id: cache-mingw
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ runner.temp }}/llvm-mingw
+          key: llvm-mingw-20260616-ucrt-aarch64
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          # ccache
+          $ccacheDir = "$env:RUNNER_TEMP\ccache-bin"
+          if (-not (Test-Path "$ccacheDir/ccache.exe")) {
+            Write-Host "Downloading ccache..."
+            $ccacheUrl = "https://github.com/ccache/ccache/releases/download/v4.13.6/ccache-4.13.6-windows-aarch64.zip"
+            $ccacheZip = "$env:RUNNER_TEMP\ccache.zip"
+            Invoke-WebRequest -Uri $ccacheUrl -OutFile $ccacheZip
+            Expand-Archive -Path $ccacheZip -DestinationPath $ccacheDir -Force
+            # Move files from nested dir up one level
+            if (Test-Path "$ccacheDir/ccache-4.13.6-windows-aarch64") {
+              Get-ChildItem "$ccacheDir/ccache-4.13.6-windows-aarch64" | Move-Item -Destination $ccacheDir
+              Remove-Item "$ccacheDir/ccache-4.13.6-windows-aarch64"
+            }
+            Write-Host "ccache downloaded and extracted"
+          } else {
+            Write-Host "ccache found in cache"
+          }
+          echo "$ccacheDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+          # LLVM MinGW toolchain
+          $mingwUrl = "https://github.com/mstorsjo/llvm-mingw/releases/download/20260616/llvm-mingw-20260616-ucrt-aarch64.zip"
+          $mingwZip = "$env:RUNNER_TEMP\llvm-mingw.zip"
+          $mingwDest = "$env:RUNNER_TEMP\llvm-mingw"
+          if (-not (Test-Path "$mingwDest/llvm-mingw-20260616-ucrt-aarch64")) {
+            Write-Host "Downloading LLVM MinGW..."
+            Invoke-WebRequest -Uri $mingwUrl -OutFile $mingwZip
+            Expand-Archive -Path $mingwZip -DestinationPath $mingwDest -Force
+          } else {
+            Write-Host "LLVM MinGW toolchain found in cache"
+          }
+          $mingwBin = Join-Path $mingwDest "llvm-mingw-20260616-ucrt-aarch64" "bin"
+          echo "$mingwBin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Save ccache binary
+        id: save-ccache
+        if: always()
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ runner.temp }}/ccache-bin
+          key: ccache-4.13.6-windows-aarch64
+
+      - name: Save LLVM MinGW
+        id: save-mingw
+        if: always()
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ runner.temp }}/llvm-mingw
+          key: llvm-mingw-20260616-ucrt-aarch64
+
+      - name: Log compiler version
+        run: clang++ --version
+
+      - name: Configure
+        run: |
+          cmake -S . -B build \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DDISABLE_EXTERNAL_DEPS_WARNINGS=ON \
+            -DENABLE_COVERAGE=OFF \
+            -DADDRESS_SANITIZER=OFF \
+            -DGR_USE_FETCHCONTENT_DEPS=ON \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Save ccache objects
+        id: save-ccache-objects
+        if: always()
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.ccache
+          key: ccache-obj-${{ github.head_ref || github.run_id }}-${{ hashFiles('CMakeLists.txt', 'core/CMakeLists.txt') }}
+
+      - name: Execute tests
+        env:
+          DISABLE_SENSITIVE_TESTS: 1
+        working-directory: ${{ github.workspace }}/build
+        run: ctest --output-on-failure --timeout 120 -E "qa_Tags|qa_thread_affinity|qa_buffer|qa_DynamicPort|qa_Profiler|qa_PluginLoader"
+
+      - name: Execute main binary
+        working-directory: ${{ github.workspace }}/build
+        run: ./core/src/main.exe
+
+      - name: Install core SDK
+        run: cmake --install build --prefix "${{ github.workspace }}/install-core"
+
+      - name: Build installed SDK smoke project
+        run: |
+          cmake -S test_external/minimal_blocklib -B build-smoke \
+            -G Ninja \
+            -DCMAKE_PREFIX_PATH="${{ github.workspace }}/install-core" \
+            -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_C_COMPILER=clang
+          cmake --build build-smoke

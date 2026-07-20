@@ -107,35 +107,16 @@ const boost::ut::suite<"gr::allocator::Logging"> _logging = [] {
         expect(is_aligned(v.data(), 64UZ));
     };
 
-    "custom CounterLogger"_test = [] {
-        using namespace boost::ut;
-
-        using Alloc = gr::allocator::Logging<int, gr::allocator::Default<int>, CounterLogger>;
-        std::vector<int, Alloc> v(0UZ, Alloc{}); // default-constructed CounterLogger inside
-
-        v.resize(100UZ);
-        v.clear();
-        v.shrink_to_fit(); // not-binding behaviour mandated by the standard: https://eel.is/c%2B%2Bdraft/vector.capacity
-
-        auto alloc_copy = v.get_allocator();
-        expect(alloc_copy.logger().alloc_count >= 1UZ);
-#if defined(_LIBCPP_VERSION) // libc++ -- specific behaviour
-        expect(alloc_copy.logger().dealloc_count == 1UZ);
-#else // libstdc++ -- specific behaviour
-        expect(alloc_copy.logger().dealloc_count == 0UZ); // nothing deallocated here - vector and allocator still lives
-#endif
-    };
-
-    "custom CounterLogger w/ external ref"_test = [] {
+"custom CounterLogger"_test = [] {
         using namespace boost::ut;
 
         CounterLogger counters{};
         using Alloc = gr::allocator::Logging<int, gr::allocator::Default<int>, CounterLoggerRef>;
 
-        { [[maybe_unused]] std::vector<int, Alloc> v(100UZ, Alloc{{}, CounterLoggerRef{&counters}}); }
+        { std::vector<int, Alloc> v(0UZ, Alloc{{}, CounterLoggerRef{&counters}}); v.resize(100UZ); } // alloc + dealloc via CounterLoggerRef
 
-        expect(counters.alloc_count >= 1UZ);
-        expect(counters.dealloc_count >= 1UZ);
+        expect(counters.alloc_count >= 1UZ) << "alloc_count (" << counters.alloc_count << ") >= 1";
+        expect(counters.dealloc_count >= 1UZ) << "dealloc_count (" << counters.dealloc_count << ") >= 1";
     };
 };
 

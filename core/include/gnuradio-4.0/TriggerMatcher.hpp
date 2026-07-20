@@ -270,8 +270,8 @@ inline void verifyFilterState(std::string_view matchCriteria, property_map& stat
             triggerName = str;
         }
     }
-    if (tag.map.contains(tag::CONTEXT.shortKey()) && tag.map.at(tag::CONTEXT.shortKey()).holds<std::string>()) {
-        const auto str = tag.map.at(tag::CONTEXT.shortKey()).value_or(std::string_view{});
+    if (tag.map.contains(tag::CONTEXT_KEY.shortKey()) && tag.map.at(tag::CONTEXT_KEY.shortKey()).holds<std::string>()) {
+        const auto str = tag.map.at(tag::CONTEXT_KEY.shortKey()).value_or(std::string_view{});
         if (str.data()) {
             triggerCtx = str;
         }

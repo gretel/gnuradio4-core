@@ -5,7 +5,9 @@
 #include <string>
 #include <string_view>
 
+#ifdef INTERNAL_ENABLE_BLOCK_PLUGINS
 #include <dlfcn.h>
+#endif
 
 #include "BlockRegistry.hpp"
 
