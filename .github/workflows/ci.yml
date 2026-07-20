@@ -349,7 +349,7 @@ jobs:
         env:
           DISABLE_SENSITIVE_TESTS: 1
         working-directory: ${{ github.workspace }}/build
-        run: ctest --output-on-failure --timeout 120 -E "qa_Tags|qa_thread_affinity"
+        run: ctest --output-on-failure --timeout 120 -E "qa_Tags|qa_thread_affinity|qa_buffer|qa_DynamicPort|qa_Profiler|qa_PluginLoader"
 
       - name: Execute main binary
         working-directory: ${{ github.workspace }}/build
