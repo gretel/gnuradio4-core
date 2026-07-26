@@ -194,7 +194,7 @@ inline void loadGraphFromMap(PluginLoader& loader, gr::Graph& resultGraph, gr::p
                         throw gr::exception(std::format("ctxPar is not a property_map"));
                     }
 
-                    const auto ctxName       = ctxPar->at(gr::tag::CONTEXT.shortKey()).value_or(std::string_view{});
+                    const auto ctxName       = ctxPar->at(gr::tag::CONTEXT_KEY.shortKey()).value_or(std::string_view{});
                     const auto ctxTime       = checked_access_ptr{ctxPar->at(gr::tag::CONTEXT_TIME.shortKey()).get_if<std::uint64_t>()};
                     const auto ctxParameters = checked_access_ptr{ctxPar->at("parameters").get_if<property_map>()};
                     if (ctxName.data() == nullptr || ctxTime == nullptr || ctxParameters == nullptr) {

@@ -153,11 +153,18 @@ class SchedulerRegistry : public GeneralRegistry<SchedulerModel, SchedulerWrappe
     friend SchedulerRegistry& globalSchedulerRegistry(std::source_location location);
 };
 
+#if defined(__MINGW32__) && defined(__clang__)
+_Pragma("clang diagnostic push")
+_Pragma("clang diagnostic ignored \"-Wdll-attribute-on-redeclaration\"")
+#endif
 GNURADIO_EXPORT
 BlockRegistry& globalBlockRegistry(std::source_location location = std::source_location::current());
 
 GNURADIO_EXPORT
 SchedulerRegistry& globalSchedulerRegistry(std::source_location location = std::source_location::current());
+#if defined(__MINGW32__) && defined(__clang__)
+_Pragma("clang diagnostic pop")
+#endif
 
 } // namespace gr
 

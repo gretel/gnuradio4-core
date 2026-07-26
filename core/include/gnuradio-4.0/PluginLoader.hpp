@@ -371,13 +371,13 @@ public:
 #else
                 if (file.is_regular_file() && file.path().extension() == ".so") {
 #endif
-                    auto fileString = file.path().string();
+                    auto fileString = file.path().generic_string();
                     if (_loadedPluginFiles.contains(fileString)) {
                         continue;
                     }
                     _loadedPluginFiles.insert(fileString);
 
-                    if (PluginHandler handler(file.path().string()); handler) {
+                    if (PluginHandler handler(file.path().generic_string()); handler) {
                         for (std::string_view blockName : handler->availableBlocks()) {
                             _pluginForBlockName.emplace(std::string(blockName), handler.operator->());
                         }
@@ -389,7 +389,7 @@ public:
                         _pluginHandlers.push_back(std::move(handler));
 
                     } else {
-                        _failedPlugins[file.path().string()] = handler.status();
+                        _failedPlugins[file.path().generic_string()] = handler.status();
                     }
                 }
             }

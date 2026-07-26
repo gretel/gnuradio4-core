@@ -63,7 +63,7 @@ property_map serializeBlockImpl(gr::PluginLoader& pluginLoader, const std::share
                     }
                 }).visit(ctxTime.context);
 
-                ctxParam.emplace(gr::tag::CONTEXT.shortKey(), contextStr);
+                ctxParam.emplace(gr::tag::CONTEXT_KEY.shortKey(), contextStr);
                 ctxParam.emplace(gr::tag::CONTEXT_TIME.shortKey(), ctxTime.time);
                 ctxParam.emplace(serialization_fields::BLOCK_PARAMETERS, writeParameters(settingsMap));
                 ctxParamsSeq.emplace_back(std::move(ctxParam));

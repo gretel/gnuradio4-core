@@ -375,8 +375,8 @@ void CtxSettingsBase::removeExpiredStoredParameters() {
 // --- Private helpers: tag parsing ---
 
 std::optional<std::string> CtxSettingsBase::contextInTag(const Tag& tag) const {
-    if (tag.map.contains(gr::tag::CONTEXT.shortKey())) {
-        const pmt::Value& ctxInfo = tag.map.at(gr::tag::CONTEXT.shortKey());
+    if (tag.map.contains(gr::tag::CONTEXT_KEY.shortKey())) {
+        const pmt::Value& ctxInfo = tag.map.at(gr::tag::CONTEXT_KEY.shortKey());
         auto              result  = ctxInfo.value_or(std::string_view{});
         if (result.data() != nullptr) {
             return {std::string(result)};
@@ -397,7 +397,7 @@ std::optional<std::uint64_t> CtxSettingsBase::triggeredTimeInTag(const Tag& tag)
 }
 
 std::optional<SettingsCtx> CtxSettingsBase::createSettingsCtxFromTag(const Tag& tag) const {
-    // If CONTEXT is not present then return std::nullopt
+    // If CONTEXT_KEY is not present then return std::nullopt
     // IF TRIGGER_TIME is not present then time = now()
 
     if (auto ctxValue = contextInTag(tag); ctxValue.has_value()) {
